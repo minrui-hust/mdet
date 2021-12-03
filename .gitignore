@@ -8,3 +8,4 @@ devel/
 log/
 package/
 .catkin_workspace
+*.pyc
