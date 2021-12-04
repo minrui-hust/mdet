@@ -5,7 +5,7 @@ import mdet.utils.io as io
 
 def summary(root_path, split, nsweep=5):
     anno_path = os.path.join(root_path, split, 'annos')
-    frame_name_list = list(os.listdir(anno_path))
+    frame_name_list = sort_frame(list(os.listdir(anno_path)))
 
     infos = []
     for cur_frame_name in tqdm(frame_name_list):
@@ -38,3 +38,14 @@ def summary(root_path, split, nsweep=5):
         infos.append(info)
 
     io.dump(infos, os.path.join(root_path, f'{split}_info.pkl'), format='pkl')
+
+
+def sort_frame(frame_name_list):
+    seq_frame_list = []
+    for frame_name in frame_name_list:
+        frame_name = os.path.splitext(frame_name)[0]
+        seq, frame = frame_name.split('-')
+        seq_frame_list.append((seq, int(frame)))
+    seq_frame_list.sort()
+
+    return [f'{p[0]}-{p[1]}.pkl' for p in seq_frame_list]

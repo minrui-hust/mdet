@@ -17,13 +17,9 @@ class Factory(object):
         self._component_dict = {}
         pass
 
-    def register(self):
-
-        def _register(cls):
-            self._register(cls)
-            return cls
-
-        return _register
+    def register(self, cls):
+        self._register(cls)
+        return cls
 
     def create(self, cfg):
         if not isinstance(cfg, dict):
@@ -55,7 +51,7 @@ FI = Factory()
 
 if __name__ == '__main__':
 
-    @FI.register()
+    @FI.register
     class A(object):
         def __init__(self, c0, c1=5):
             self.c0 = c0
@@ -68,9 +64,7 @@ if __name__ == '__main__':
 
     a.say()
 
-    cf = Factory()
-
-    @FI.register()
+    @FI.register
     class B(object):
         def __init__(self, c0, c1=5):
             self.c0 = c0

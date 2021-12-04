@@ -1,7 +1,5 @@
 import pytorch_lightning as pl
-from factory.component_factory import ComponentFactory
-
-CF = ComponentFactory()
+from mdet.utils.factory import FI
 
 
 class Runner(pl.LightningModule):
@@ -10,16 +8,16 @@ class Runner(pl.LightningModule):
 
         self.config = config
 
-        self.model = CF.createComponent(config['model'])
-        self.loss = CF.createComponent(config['loss'])
-        self.post_process = CF.createComponent(config['post_process'])
+        self.model = FI.create(config['model'])
+        self.loss = FI.create(config['loss'])
+        self.post_process = FI.create(config['post_process'])
 
-        self.train_dataloader = CF.createComponent(self.config['train_loader'])
-        self.val_dataloader = CF.createComponent(self.config['val_loader'])
-        self.test_dataloader = CF.createComponent(self.config['test_loader'])
+        self.train_loader = FI.create(self.config['train_loader'])
+        self.val_loader = FI.create(self.config['val_loader'])
+        self.test_loader = FI.create(self.config['test_loader'])
 
-        self.optimizer = CF.createComponent(self.config['optimizer'])
-        self.lr_scheduler = CF.createComponent(self.config['lr_scheduler'])
+        self.optimizer = FI.create(self.config['optimizer'])
+        self.lr_scheduler = FI.create(self.config['lr_scheduler'])
 
     def forward(self, batch):
         return self.model(batch)
@@ -38,6 +36,10 @@ class Runner(pl.LightningModule):
         return result
 
     def validation_epoch_end(self, epoch_output):
+        # format
+
+        # evaluate
+
         pass
 
     def test_step(self, batch, batch_idx):
@@ -46,6 +48,7 @@ class Runner(pl.LightningModule):
         return result
 
     def test_epoch_end(self, epoch_output):
+        # format
         pass
 
     def train_dataloader(self):
