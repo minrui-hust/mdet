@@ -46,12 +46,6 @@ class BaseDataset(pdata.Dataset):
         '''
         pass
 
-    def generate_gt(self, gt_path):
-        r'''
-        generate gt file for evaluation
-        '''
-        pass
-
     def __pre_transform(self, sample, info):
         r'''
         Initialization before transforms, overload by inherits

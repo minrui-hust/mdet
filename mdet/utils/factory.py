@@ -22,6 +22,8 @@ class Factory(object):
         return cls
 
     def create(self, cfg):
+        if cfg is None:
+            return None
         if not isinstance(cfg, dict):
             raise TypeError(f'cfg must be a dict, but got {type(cfg)}')
         if 'type' not in cfg:
