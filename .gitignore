@@ -10,3 +10,5 @@ package/
 .catkin_workspace
 *.pyc
 *.egg-info/
+*.so
+*.a
