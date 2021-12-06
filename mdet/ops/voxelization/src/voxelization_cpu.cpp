@@ -15,59 +15,50 @@ void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
                      const int max_points,
                      const int max_voxels,
                      const reduce_t reduce_type,
-                     const int num_points,
-                     const int num_features,
                      torch::TensorAccessor<T_int, 3> voxel_coord_to_idx,
                      torch::TensorAccessor<T, 3> voxels,
                      torch::TensorAccessor<T_int, 2> coords,
                      torch::TensorAccessor<T_int, 1> point_num,
                      int* voxel_num
                      ) { // clang-format on
-  /*
-  // declare a temp coors
-  at::Tensor temp_coors = at::zeros(
-      {num_points, NDim}, at::TensorOptions().dtype(at::kInt).device(at::kCPU));
 
-  // First use dynamic voxelization to get coors,
-  // then check max points/voxels constraints
-
-  int voxelidx, num;
-  auto coor = temp_coors.accessor<int, 2>();
-
-  for (int i = 0; i < num_points; ++i) {
-    // T_int* coor = temp_coors.data_ptr<int>() + i * NDim;
-
-    if (coor[i][0] == -1)
+  // pos -> cord ->idx
+  std::array<int, NDim> voxel_coord;
+  for (auto i = 0; i < points.size(0); ++i) {
+    // calc the voxel coordiantes
+    bool failed = false;
+    for (auto j = 0u; j < NDim; ++j) {
+      int c = floor((points[i][j] - point_range[j]) / voxel_size[j]);
+      if (c < 0 || c >= voxel_reso[j]) {
+        failed = true;
+        break;
+      }
+      voxel_coord[NDim - 1 - j] = c;
+    }
+    if (failed) {
       continue;
+    }
 
-    voxelidx = coor_to_voxelidx[coor[i][0]][coor[i][1]][coor[i][2]];
-
-    // record voxel
-    if (voxelidx == -1) {
-      voxelidx = voxel_num;
-      if (max_voxels != -1 && voxel_num >= max_voxels)
+    // get voxel index
+    auto &voxel_idx =
+        voxel_coord_to_idx[voxel_coord[0]][voxel_coord[1]][voxel_coord[2]];
+    if (voxel_idx == -1) {              // new voxel may need to create
+      if ((*voxel_num) >= max_voxels) { // max voxel num reached
         continue;
-      voxel_num += 1;
-
-      coor_to_voxelidx[coor[i][0]][coor[i][1]][coor[i][2]] = voxelidx;
-
-      for (int k = 0; k < NDim; ++k) {
-        coors[voxelidx][k] = coor[i][k];
+      } else {
+        voxel_idx = *voxel_num;
+        ++(*voxel_num);
       }
     }
 
-    // put points into voxel
-    num = num_points_per_voxel[voxelidx];
-    if (max_points == -1 || num < max_points) {
-      for (int k = 0; k < num_features; ++k) {
-        voxels[voxelidx][num][k] = points[i][k];
-      }
-      num_points_per_voxel[voxelidx] += 1;
+    auto &voxel_point_num = point_num[voxel_idx];
+    if (voxel_point_num >= max_points) { // max point num of this voxel reached
+      continue;
+    } else { // copy point into voxel and increase the point_num of this voxel
+      voxels[voxel_idx][voxel_point_num] = points[i];
+      ++voxel_point_num;
     }
   }
-
-  return;
-  */
 }
 
 } // namespace
@@ -90,9 +81,6 @@ void voxelize_cpu(const at::Tensor &points,
   AT_ASSERTM(points.device().is_cpu(), "points must be a CPU tensor");
 
   std::vector<int> voxel_reso(NDim);
-  const int num_points = points.size(0);
-  const int num_features = points.size(1);
-
   for (auto i = 0u; i < NDim; ++i) {
     voxel_reso[i] =
         round((point_range[NDim + i] - point_range[i]) / voxel_size[i]);
@@ -112,8 +100,6 @@ void voxelize_cpu(const at::Tensor &points,
             max_points,
             max_voxels,
             reduce_type,
-            num_points,
-            num_features,
             voxel_coord_to_idx.accessor<int, 3>(),
             voxels.accessor<scalar_t, 3>(),
             coords.accessor<int, 2>(), 

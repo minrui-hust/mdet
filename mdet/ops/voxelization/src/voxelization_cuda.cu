@@ -3,528 +3,280 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <torch/types.h>
 
+#include "voxelization.h"
 #include <ATen/cuda/CUDAApplyUtils.cuh>
 
-#define CHECK_CUDA(x) \
+#define CHECK_CUDA(x)                                                          \
   TORCH_CHECK(x.device().is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x) \
+
+#define CHECK_CONTIGUOUS(x)                                                    \
   TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
-#define CHECK_INPUT(x) \
-  CHECK_CUDA(x);       \
-  CHECK_CONTIGUOUS(x)
 
-namespace {
-int const threadsPerBlock = sizeof(unsigned long long) * 8;
-}
+#define CHECK_DATATYPE(x)                                                      \
+  TORCH_CHECK(x.scalar_type() == at::ScalarType::Float, #x " must be float")
 
-#define CUDA_1D_KERNEL_LOOP(i, n)                            \
-  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; \
+#define CHECK_INPUT(x)                                                         \
+  CHECK_CUDA(x);                                                               \
+  CHECK_CONTIGUOUS(x);                                                         \
+  CHECK_DATATYPE(x)
+
+#define CUDA_1D_KERNEL_LOOP(i, n)                                              \
+  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n;                   \
        i += blockDim.x * gridDim.x)
 
-template <typename T, typename T_int>
-__global__ void dynamic_voxelize_kernel(
-    const T* points, T_int* coors, const float voxel_x, const float voxel_y,
-    const float voxel_z, const float coors_x_min, const float coors_y_min,
-    const float coors_z_min, const float coors_x_max, const float coors_y_max,
-    const float coors_z_max, const int grid_x, const int grid_y,
-    const int grid_z, const int num_points, const int num_features,
-    const int NDim) {
-  //   const int index = blockIdx.x * threadsPerBlock + threadIdx.x;
-  CUDA_1D_KERNEL_LOOP(index, num_points) {
-    // To save some computation
-    auto points_offset = points + index * num_features;
-    auto coors_offset = coors + index * NDim;
-    int c_x = floor((points_offset[0] - coors_x_min) / voxel_x);
-    if (c_x < 0 || c_x >= grid_x) {
-      coors_offset[0] = -1;
-      return;
-    }
+namespace {
 
-    int c_y = floor((points_offset[1] - coors_y_min) / voxel_y);
-    if (c_y < 0 || c_y >= grid_y) {
-      coors_offset[0] = -1;
-      coors_offset[1] = -1;
-      return;
-    }
+constexpr size_t NDim = 3;
 
-    int c_z = floor((points_offset[2] - coors_z_min) / voxel_z);
-    if (c_z < 0 || c_z >= grid_z) {
-      coors_offset[0] = -1;
-      coors_offset[1] = -1;
-      coors_offset[2] = -1;
-    } else {
-      coors_offset[0] = c_z;
-      coors_offset[1] = c_y;
-      coors_offset[2] = c_x;
-    }
-  }
+template <typename T_int> inline T_int CeilDiv(T_int a, T_int b) {
+  return (a + b - 1) / b;
 }
 
-template <typename T, typename T_int>
-__global__ void assign_point_to_voxel(const int nthreads, const T* points,
-                                      T_int* point_to_voxelidx,
-                                      T_int* coor_to_voxelidx, T* voxels,
-                                      const int max_points,
-                                      const int num_features,
-                                      const int num_points, const int NDim) {
-  CUDA_1D_KERNEL_LOOP(thread_idx, nthreads) {
-    // const int index = blockIdx.x * threadsPerBlock + threadIdx.x;
-    int index = thread_idx / num_features;
+// list all the point in a voxel
+struct __align__(4) ListNode {
+  int next;  // next point id
+  int3 cord; // voxel coord of this point
+};
 
-    int num = point_to_voxelidx[index];
-    int voxelidx = coor_to_voxelidx[index];
-    if (num > -1 && voxelidx > -1) {
-      auto voxels_offset =
-          voxels + voxelidx * max_points * num_features + num * num_features;
+__global__ void ScatterPointToVoxel( // clang-format off
+                                     // input
+                                     const float* __restrict__ points,  // input points data, point_num*point_dim
+                                     int point_num,  // point number,
+                                     int point_dim,  // point dimension,
+                                     float range_min_x, float range_min_y, float range_min_z, // range
+                                     float voxel_size_x, float voxel_size_y, float voxel_size_z, // voxel size
+                                     int grid_size_x, int grid_size_y, int grid_size_z, // grid size
+                                     int max_voxels, // max output voxels
 
-      int k = thread_idx % num_features;
-      voxels_offset[k] = points[thread_idx];
-    }
-  }
-}
+                                     // output
+                                     int *voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
+                                     ListNode *point_nodes, // list node of each point, size: point_num
+                                     int *output_voxel_hash_id, // out voxel hash id, size: max_voxels
+                                     int *valid_voxel_num // output valid voxel number, 1
+                                    ){ // clang-format on
+  CUDA_1D_KERNEL_LOOP(i, point_num) {
+    // get current point and cooresponding list node
+    const float *cur_point = points + i * point_dim;
+    ListNode *cur_node = point_nodes + i;
 
-template <typename T, typename T_int>
-__global__ void assign_voxel_coors(const int nthreads, T_int* coor,
-                                   T_int* point_to_voxelidx,
-                                   T_int* coor_to_voxelidx, T_int* voxel_coors,
-                                   const int num_points, const int NDim) {
-  CUDA_1D_KERNEL_LOOP(thread_idx, nthreads) {
-    // const int index = blockIdx.x * threadsPerBlock + threadIdx.x;
-    // if (index >= num_points) return;
-    int index = thread_idx / NDim;
-    int num = point_to_voxelidx[index];
-    int voxelidx = coor_to_voxelidx[index];
-    if (num == 0 && voxelidx > -1) {
-      auto coors_offset = voxel_coors + voxelidx * NDim;
-      int k = thread_idx % NDim;
-      coors_offset[k] = coor[thread_idx];
-    }
-  }
-}
+    // clang-format off
+        // calc which voxel this point scatter into
+        auto& cord = cur_node->cord;
+        cord.x = floor((cur_point[0] - range_min_x) / voxel_size_x);
+        cord.y = floor((cur_point[1] - range_min_y) / voxel_size_y);
+        cord.z = floor((cur_point[2] - range_min_z) / voxel_size_z);
+    // clang-format on
 
-template <typename T_int>
-__global__ void point_to_voxelidx_kernel(const T_int* coor,
-                                         T_int* point_to_voxelidx,
-                                         T_int* point_to_pointidx,
-                                         const int max_points,
-                                         const int max_voxels,
-                                         const int num_points, const int NDim) {
-  CUDA_1D_KERNEL_LOOP(index, num_points) {
-    auto coor_offset = coor + index * NDim;
-    // skip invalid points
-    if ((index >= num_points) || (coor_offset[0] == -1)) return;
+    // clang-format off
+        // drop point out of range
+        if (cord.x < 0 || cord.x >= grid_size_x ||
+            cord.y < 0 || cord.y >= grid_size_y || 
+            cord.z < 0 || cord.z >= grid_size_z ) continue;
+    // clang-format on
 
-    int num = 0;
-    int coor_x = coor_offset[0];
-    int coor_y = coor_offset[1];
-    int coor_z = coor_offset[2];
-    // only calculate the coors before this coor[index]
-    for (int i = 0; i < index; ++i) {
-      auto prev_coor = coor + i * NDim;
-      if (prev_coor[0] == -1) continue;
+    // clang-format off
+        int hash_id = grid_size_x * grid_size_y * cord.z+ 
+                                    grid_size_x * cord.y+ 
+                                                  cord.x;
+    // clang-format on
 
-      // Find all previous points that have the same coors
-      // if find the same coor, record it
-      if ((prev_coor[0] == coor_x) && (prev_coor[1] == coor_y) &&
-          (prev_coor[2] == coor_z)) {
-        num++;
-        if (num == 1) {
-          // point to the same coor that first show up
-          point_to_pointidx[index] = i;
-        } else if (num >= max_points) {
-          // out of boundary
-          return;
-        }
-      }
-    }
-    if (num == 0) {
-      point_to_pointidx[index] = index;
-    }
-    if (num < max_points) {
-      point_to_voxelidx[index] = num;
-    }
-  }
-}
+    // data in voxel_head_id_addr will be accessed by different thread,
+    // protection required
+    int *voxel_head_id_addr = voxel_list_head_id + hash_id;
 
-template <typename T_int>
-__global__ void determin_voxel_num(
-    // const T_int* coor,
-    T_int* num_points_per_voxel, T_int* point_to_voxelidx,
-    T_int* point_to_pointidx, T_int* coor_to_voxelidx, T_int* voxel_num,
-    const int max_points, const int max_voxels, const int num_points) {
-  // only calculate the coors before this coor[index]
-  for (int i = 0; i < num_points; ++i) {
-    // if (coor[i][0] == -1)
-    //    continue;
-    int point_pos_in_voxel = point_to_voxelidx[i];
-    // record voxel
-    if (point_pos_in_voxel == -1) {
-      // out of max_points or invalid point
-      continue;
-    } else if (point_pos_in_voxel == 0) {
-      // record new voxel
-      int voxelidx = voxel_num[0];
-      if (voxel_num[0] >= max_voxels) continue;
-      voxel_num[0] += 1;
-      coor_to_voxelidx[i] = voxelidx;
-      num_points_per_voxel[voxelidx] = 1;
-    } else {
-      int point_idx = point_to_pointidx[i];
-      int voxelidx = coor_to_voxelidx[point_idx];
-      if (voxelidx != -1) {
-        coor_to_voxelidx[i] = voxelidx;
-        num_points_per_voxel[voxelidx] += 1;
+    // atomic set the value in voxel_head_id_addr to be current point index
+    // which is 'i'
+    int pre_head_id = atomicExch(voxel_head_id_addr, i);
+
+    // point to previous point
+    cur_node->next = pre_head_id;
+
+    // check if we should make a new voxel
+    // NOTE: valid_voxel_num may be larger than max_voxels
+    if (-1 == pre_head_id) {
+      int pre_valid_voxel_num = atomicAdd(valid_voxel_num, 1);
+      if (pre_valid_voxel_num < max_voxels) {
+        output_voxel_hash_id[pre_valid_voxel_num] = hash_id;
       }
     }
   }
 }
 
-__global__ void nondisterministic_get_assign_pos(
-    const int nthreads, const int32_t *coors_map, int32_t *pts_id,
-    int32_t *coors_count, int32_t *reduce_count, int32_t *coors_order) {
-  CUDA_1D_KERNEL_LOOP(thread_idx, nthreads) {
-    int coors_idx = coors_map[thread_idx];
-    if (coors_idx > -1) {
-      int32_t coors_pts_pos = atomicAdd(&reduce_count[coors_idx], 1);
-      pts_id[thread_idx] = coors_pts_pos;
-      if (coors_pts_pos == 0) {
-        coors_order[coors_idx] = atomicAdd(coors_count, 1);
+__global__ void GatherVoxelFromPoint( // clang-format off
+                                      // input
+                                      const float* __restrict__ points,
+                                      int point_num, // point number
+                                      int point_dim, // point dimension
+                                      const int * __restrict__ voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
+                                      const ListNode * __restrict__ point_nodes, // list node of each point, size: point_num
+                                      const int * __restrict__ output_voxel_hash_id, // out voxel hash id, size: max_voxels
+                                      int * __restrict__ valid_voxel_num, // valid voxel num addr
+                                      int max_voxels, // max output voxels
+                                      int max_points, // max num of points in a voxel
+
+                                      // output
+                                      float *voxels,
+                                      int* voxel_cords,
+                                      int* voxel_points
+                                    ) { // clang-format on
+  CUDA_1D_KERNEL_LOOP(i, min(*valid_voxel_num, max_voxels)) {
+    const auto &voxel_id = i;
+    float *cur_voxel = voxels + voxel_id * max_points * point_dim;
+    int *cur_voxel_cord = voxel_cords + voxel_id * 3;
+
+    // the list head
+    int cur_point_global_id = voxel_list_head_id[output_voxel_hash_id[i]];
+
+    // NOTE: in reverse order
+    cur_voxel_cord[0] = point_nodes[cur_point_global_id].cord.z;
+    cur_voxel_cord[1] = point_nodes[cur_point_global_id].cord.y;
+    cur_voxel_cord[2] = point_nodes[cur_point_global_id].cord.x;
+
+    // loop utils list end or max_points reached
+    int voxel_point_id = 0;
+    while (cur_point_global_id >= 0 && voxel_point_id < max_points) {
+      // copy point's coors into voxel
+      for (auto j = 0; j < point_dim; ++j) {
+        cur_voxel[voxel_point_id * point_dim + j] =
+            points[cur_point_global_id * point_dim + j];
       }
+
+      // move to next point
+      cur_point_global_id = point_nodes[cur_point_global_id].next;
+      voxel_point_id++;
+    }
+
+    // record how final point number in voxel
+    voxel_points[i] = voxel_point_id;
+
+    // clip valid_voxel_num on thread 0
+    if (i == 0) {
+      int real_valid_voxel_num = min(*valid_voxel_num, max_voxels);
+      atomicExch(valid_voxel_num, real_valid_voxel_num);
     }
   }
 }
 
-template<typename T>
-__global__ void nondisterministic_assign_point_voxel(
-    const int nthreads, const T *points, const int32_t *coors_map,
-    const int32_t *pts_id, const int32_t *coors_in,
-    const int32_t *reduce_count, const int32_t *coors_order,
-    T *voxels, int32_t *coors, int32_t *pts_count, const int max_voxels,
-    const int max_points, const int num_features, const int NDim) {
-  CUDA_1D_KERNEL_LOOP(thread_idx, nthreads) {
-    int coors_idx = coors_map[thread_idx];
-    int coors_pts_pos = pts_id[thread_idx];
-    if (coors_idx > -1) {
-      int coors_pos = coors_order[coors_idx];
-      if (coors_pos < max_voxels && coors_pts_pos < max_points) {
-        auto voxels_offset =
-            voxels + (coors_pos * max_points + coors_pts_pos) * num_features;
-        auto points_offset = points + thread_idx * num_features;
-        for (int k = 0; k < num_features; k++) {
-          voxels_offset[k] = points_offset[k];
-        }
-        if (coors_pts_pos == 0) {
-          pts_count[coors_pos] = min(reduce_count[coors_idx], max_points);
-          auto coors_offset = coors + coors_pos * NDim;
-          auto coors_in_offset = coors_in + coors_idx * NDim;
-          for (int k = 0; k < NDim; k++) {
-            coors_offset[k] = coors_in_offset[k];
-          }
-        }
-      }
-    }
-  }
+// clang-format off
+void VoxelizationAsync( 
+                       // input
+                       const float* points,  // input points data, point_num*point_dim
+                       int point_num,  // point number,
+                       int point_dim,  // point dimension,
+                       std::vector<float> point_range, // point cloud range
+                       std::vector<float> voxel_size, // voxel size
+                       std::vector<int> grid_size, // grid size
+                       int max_voxels, // max output voxels
+                       int max_points, // max points in an voxel
+
+                       // tmp
+                       int* voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
+                       ListNode* point_nodes, // list node of each point, size: point_num
+                       int* output_voxel_hash_id, // out voxel hash id, size: max_voxels
+
+                       // output
+                       float* voxels, // output voxels
+                       int* voxel_cords, // voxel coordinates
+                       int* voxel_points, // how many points in each voxel
+                       int* valid_voxel_num, // output valid voxel number, 1
+
+                       // cuda stream
+                       cudaStream_t stream
+                      ){ // clang-format on
+  // cuda kernel grid and block size
+  int block, grid;
+
+  // clang-format off
+    cudaOccupancyMaxPotentialBlockSize(&grid, &block, ScatterPointToVoxel, 0, point_num);
+    grid= std::min(grid, CeilDiv(point_num, block));
+    ScatterPointToVoxel<<<grid, block, 0, stream>>>(
+        points, point_num, point_dim, 
+        point_range[0], point_range[1], point_range[2], 
+        voxel_size[0], voxel_size[1], voxel_size[2], 
+        grid_size[0], grid_size[1], grid_size[2], 
+        max_voxels,
+        voxel_list_head_id,
+        point_nodes,
+        output_voxel_hash_id,
+        valid_voxel_num
+    );
+  // clang-format on
+
+  // clang-format off
+    cudaOccupancyMaxPotentialBlockSize(&grid, &block, GatherVoxelFromPoint, 0, max_voxels);
+    grid = std::min(grid, CeilDiv(max_voxels, block));
+    GatherVoxelFromPoint<<<grid, block, 0, stream>>>(
+                                        points, point_num, point_dim, // points
+                                        voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
+                                        point_nodes, // list node of each point, size: point_num
+                                        output_voxel_hash_id, // out voxel hash id, size: max_voxels
+                                        valid_voxel_num, // valid voxel num addr
+                                        max_voxels, // max output voxels
+                                        max_points, // max num of points in a voxel
+                                        voxels, // output voxel data
+                                        voxel_cords, // output voxel cords
+                                        voxel_points
+    );
+  // clang-format on
 }
+
+} // namespace
 
 namespace voxelization {
 
-int hard_voxelize_gpu(const at::Tensor& points, at::Tensor& voxels,
-                      at::Tensor& coors, at::Tensor& num_points_per_voxel,
-                      const std::vector<float> voxel_size,
-                      const std::vector<float> coors_range,
-                      const int max_points, const int max_voxels,
-                      const int NDim = 3) {
-  // current version tooks about 0.04s for one frame on cpu
-  // check device
+// clang-format off
+void voxelize_gpu(const at::Tensor &points,
+                 const std::vector<float> &point_range,
+                 const std::vector<float> &voxel_size,
+                 const int max_points, 
+                 const int max_voxels,
+                 const reduce_t reduce_type,
+                 at::Tensor &voxels, 
+                 at::Tensor &coords,
+                 at::Tensor &point_num,
+                 at::Tensor &voxel_num){
+  // clang-format on
   CHECK_INPUT(points);
-
   at::cuda::CUDAGuard device_guard(points.device());
 
-  const int num_points = points.size(0);
-  const int num_features = points.size(1);
-
-  const float voxel_x = voxel_size[0];
-  const float voxel_y = voxel_size[1];
-  const float voxel_z = voxel_size[2];
-  const float coors_x_min = coors_range[0];
-  const float coors_y_min = coors_range[1];
-  const float coors_z_min = coors_range[2];
-  const float coors_x_max = coors_range[3];
-  const float coors_y_max = coors_range[4];
-  const float coors_z_max = coors_range[5];
-
-  const int grid_x = round((coors_x_max - coors_x_min) / voxel_x);
-  const int grid_y = round((coors_y_max - coors_y_min) / voxel_y);
-  const int grid_z = round((coors_z_max - coors_z_min) / voxel_z);
-
-  // map points to voxel coors
-  at::Tensor temp_coors =
-      at::zeros({num_points, NDim}, points.options().dtype(at::kInt));
-
-  dim3 grid(std::min(at::cuda::ATenCeilDiv(num_points, 512), 4096));
-  dim3 block(512);
-
-  // 1. link point to corresponding voxel coors
-  AT_DISPATCH_ALL_TYPES(
-      points.scalar_type(), "hard_voxelize_kernel", ([&] {
-        dynamic_voxelize_kernel<scalar_t, int>
-            <<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(
-                points.contiguous().data_ptr<scalar_t>(),
-                temp_coors.contiguous().data_ptr<int>(), voxel_x, voxel_y,
-                voxel_z, coors_x_min, coors_y_min, coors_z_min, coors_x_max,
-                coors_y_max, coors_z_max, grid_x, grid_y, grid_z, num_points,
-                num_features, NDim);
-      }));
-  cudaDeviceSynchronize();
-  AT_CUDA_CHECK(cudaGetLastError());
-
-  // 2. map point to the idx of the corresponding voxel, find duplicate coor
-  // create some temporary variables
-  auto point_to_pointidx = -at::ones(
-      {
-          num_points,
-      },
-      points.options().dtype(at::kInt));
-  auto point_to_voxelidx = -at::ones(
-      {
-          num_points,
-      },
-      points.options().dtype(at::kInt));
-
-  dim3 map_grid(std::min(at::cuda::ATenCeilDiv(num_points, 512), 4096));
-  dim3 map_block(512);
-  AT_DISPATCH_ALL_TYPES(
-      temp_coors.scalar_type(), "determin_duplicate", ([&] {
-        point_to_voxelidx_kernel<int>
-            <<<map_grid, map_block, 0, at::cuda::getCurrentCUDAStream()>>>(
-                temp_coors.contiguous().data_ptr<int>(),
-                point_to_voxelidx.contiguous().data_ptr<int>(),
-                point_to_pointidx.contiguous().data_ptr<int>(), max_points,
-                max_voxels, num_points, NDim);
-      }));
-  cudaDeviceSynchronize();
-  AT_CUDA_CHECK(cudaGetLastError());
-
-  // 3. determin voxel num and voxel's coor index
-  // make the logic in the CUDA device could accelerate about 10 times
-  auto coor_to_voxelidx = -at::ones(
-      {
-          num_points,
-      },
-      points.options().dtype(at::kInt));
-  auto voxel_num = at::zeros(
-      {
-          1,
-      },
-      points.options().dtype(at::kInt));  // must be zero from the begining
-
-  AT_DISPATCH_ALL_TYPES(
-      temp_coors.scalar_type(), "determin_duplicate", ([&] {
-        determin_voxel_num<int><<<1, 1, 0, at::cuda::getCurrentCUDAStream()>>>(
-            num_points_per_voxel.contiguous().data_ptr<int>(),
-            point_to_voxelidx.contiguous().data_ptr<int>(),
-            point_to_pointidx.contiguous().data_ptr<int>(),
-            coor_to_voxelidx.contiguous().data_ptr<int>(),
-            voxel_num.contiguous().data_ptr<int>(), max_points, max_voxels,
-            num_points);
-      }));
-  cudaDeviceSynchronize();
-  AT_CUDA_CHECK(cudaGetLastError());
-
-  // 4. copy point features to voxels
-  // Step 4 & 5 could be parallel
-  auto pts_output_size = num_points * num_features;
-  dim3 cp_grid(std::min(at::cuda::ATenCeilDiv(pts_output_size, 512), 4096));
-  dim3 cp_block(512);
-  AT_DISPATCH_ALL_TYPES(
-      points.scalar_type(), "assign_point_to_voxel", ([&] {
-        assign_point_to_voxel<float, int>
-            <<<cp_grid, cp_block, 0, at::cuda::getCurrentCUDAStream()>>>(
-                pts_output_size, points.contiguous().data_ptr<float>(),
-                point_to_voxelidx.contiguous().data_ptr<int>(),
-                coor_to_voxelidx.contiguous().data_ptr<int>(),
-                voxels.contiguous().data_ptr<float>(), max_points, num_features,
-                num_points, NDim);
-      }));
-  //   cudaDeviceSynchronize();
-  //   AT_CUDA_CHECK(cudaGetLastError());
-
-  // 5. copy coors of each voxels
-  auto coors_output_size = num_points * NDim;
-  dim3 coors_cp_grid(
-      std::min(at::cuda::ATenCeilDiv(coors_output_size, 512), 4096));
-  dim3 coors_cp_block(512);
-  AT_DISPATCH_ALL_TYPES(
-      points.scalar_type(), "assign_point_to_voxel", ([&] {
-        assign_voxel_coors<float, int><<<coors_cp_grid, coors_cp_block, 0,
-                                         at::cuda::getCurrentCUDAStream()>>>(
-            coors_output_size, temp_coors.contiguous().data_ptr<int>(),
-            point_to_voxelidx.contiguous().data_ptr<int>(),
-            coor_to_voxelidx.contiguous().data_ptr<int>(),
-            coors.contiguous().data_ptr<int>(), num_points, NDim);
-      }));
-  cudaDeviceSynchronize();
-  AT_CUDA_CHECK(cudaGetLastError());
-
-  auto voxel_num_cpu = voxel_num.to(at::kCPU);
-  int voxel_num_int = voxel_num_cpu.data_ptr<int>()[0];
-
-  return voxel_num_int;
-}
-
-int nondisterministic_hard_voxelize_gpu(
-    const at::Tensor &points, at::Tensor &voxels,
-    at::Tensor &coors, at::Tensor &num_points_per_voxel,
-    const std::vector<float> voxel_size,
-    const std::vector<float> coors_range,
-    const int max_points, const int max_voxels,
-    const int NDim = 3) {
-
-  CHECK_INPUT(points);
-
-  at::cuda::CUDAGuard device_guard(points.device());
-
-  const int num_points = points.size(0);
-  const int num_features = points.size(1);
-
-  if (num_points == 0)
-    return 0;
-
-  const float voxel_x = voxel_size[0];
-  const float voxel_y = voxel_size[1];
-  const float voxel_z = voxel_size[2];
-  const float coors_x_min = coors_range[0];
-  const float coors_y_min = coors_range[1];
-  const float coors_z_min = coors_range[2];
-  const float coors_x_max = coors_range[3];
-  const float coors_y_max = coors_range[4];
-  const float coors_z_max = coors_range[5];
-
-  const int grid_x = round((coors_x_max - coors_x_min) / voxel_x);
-  const int grid_y = round((coors_y_max - coors_y_min) / voxel_y);
-  const int grid_z = round((coors_z_max - coors_z_min) / voxel_z);
-
-  // map points to voxel coors
-  at::Tensor temp_coors =
-      at::zeros({num_points, NDim}, points.options().dtype(torch::kInt32));
-
-  dim3 grid(std::min(at::cuda::ATenCeilDiv(num_points, 512), 4096));
-  dim3 block(512);
-
-  // 1. link point to corresponding voxel coors
-  AT_DISPATCH_ALL_TYPES(
-      points.scalar_type(), "hard_voxelize_kernel", ([&] {
-    dynamic_voxelize_kernel<scalar_t, int>
-    <<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(
-        points.contiguous().data_ptr<scalar_t>(),
-        temp_coors.contiguous().data_ptr<int>(), voxel_x, voxel_y,
-        voxel_z, coors_x_min, coors_y_min, coors_z_min, coors_x_max,
-        coors_y_max, coors_z_max, grid_x, grid_y, grid_z, num_points,
-        num_features, NDim);
-  }));
-
-  at::Tensor coors_map;
-  at::Tensor coors_count;
-  at::Tensor coors_order;
-  at::Tensor reduce_count;
-  at::Tensor pts_id;
-
-  auto coors_clean = temp_coors.masked_fill(temp_coors.lt(0).any(-1, true), -1);
-
-  std::tie(temp_coors, coors_map, reduce_count) =
-      at::unique_dim(coors_clean, 0, true, true, false);
-
-  if (temp_coors.index({0, 0}).lt(0).item<bool>()) {
-    // the first element of temp_coors is (-1,-1,-1) and should be removed
-    temp_coors = temp_coors.slice(0, 1);
-    coors_map = coors_map - 1;
+  // prepare temporary
+  std::vector<int> voxel_reso(NDim);
+  for (auto i = 0u; i < NDim; ++i) {
+    voxel_reso[i] =
+        round((point_range[NDim + i] - point_range[i]) / voxel_size[i]);
   }
 
-  int num_coors = temp_coors.size(0);
-  temp_coors = temp_coors.to(torch::kInt32);
-  coors_map = coors_map.to(torch::kInt32);
+  at::Tensor voxel_list_head_id = -at::ones(
+      {voxel_reso[0], voxel_reso[1], voxel_reso[2]}, coords.options());
 
-  coors_count = coors_map.new_zeros(1);
-  coors_order = coors_map.new_empty(num_coors);
-  reduce_count = coors_map.new_zeros(num_coors);
-  pts_id = coors_map.new_zeros(num_points);
+  at::Tensor points_node =
+      at::empty({points.size(0) * (int)sizeof(ListNode)},
+                coords.options().dtype(at::ScalarType::Byte));
 
-  dim3 cp_grid(std::min(at::cuda::ATenCeilDiv(num_points, 512), 4096));
-  dim3 cp_block(512);
-  AT_DISPATCH_ALL_TYPES(points.scalar_type(), "get_assign_pos", ([&] {
-    nondisterministic_get_assign_pos<<<cp_grid, cp_block, 0,
-    at::cuda::getCurrentCUDAStream()>>>(
-        num_points,
-        coors_map.contiguous().data_ptr<int32_t>(),
-        pts_id.contiguous().data_ptr<int32_t>(),
-        coors_count.contiguous().data_ptr<int32_t>(),
-        reduce_count.contiguous().data_ptr<int32_t>(),
-        coors_order.contiguous().data_ptr<int32_t>());
-  }));
+  at::Tensor voxel_hash_id = at::empty({max_voxels}, coords.options());
 
-  AT_DISPATCH_ALL_TYPES(
-      points.scalar_type(), "assign_point_to_voxel", ([&] {
-    nondisterministic_assign_point_voxel<scalar_t>
-    <<<cp_grid, cp_block, 0, at::cuda::getCurrentCUDAStream()>>>(
-        num_points, points.contiguous().data_ptr<scalar_t>(),
-        coors_map.contiguous().data_ptr<int32_t>(),
-        pts_id.contiguous().data_ptr<int32_t>(),
-        temp_coors.contiguous().data_ptr<int32_t>(),
-        reduce_count.contiguous().data_ptr<int32_t>(),
-        coors_order.contiguous().data_ptr<int32_t>(),
-        voxels.contiguous().data_ptr<scalar_t>(),
-        coors.contiguous().data_ptr<int32_t>(),
-        num_points_per_voxel.contiguous().data_ptr<int32_t>(),
-        max_voxels, max_points,
-        num_features, NDim);
-  }));
-  AT_CUDA_CHECK(cudaGetLastError());
-  return max_voxels < num_coors ? max_voxels : num_coors;
-}
+  // clang-format off
+  VoxelizationAsync(points.contiguous().data_ptr<float>(), 
+                    points.size(0),
+                    points.size(1),
+                    point_range,
+                    voxel_size,
+                    voxel_reso,
+                    max_voxels,
+                    max_points,
+                    voxel_list_head_id.contiguous().data_ptr<int>(),
+                    (ListNode*)points_node.contiguous().data_ptr<uint8_t>(),
+                    voxel_hash_id.contiguous().data_ptr<int>(),
+                    voxels.contiguous().data_ptr<float>(),
+                    coords.contiguous().data_ptr<int>(),
+                    point_num.contiguous().data_ptr<int>(),
+                    voxel_num.contiguous().data_ptr<int>(),
+                    at::cuda::getCurrentCUDAStream()
+                    );
+  // clang-format on
 
-void dynamic_voxelize_gpu(const at::Tensor& points, at::Tensor& coors,
-                          const std::vector<float> voxel_size,
-                          const std::vector<float> coors_range,
-                          const int NDim = 3) {
-  // current version tooks about 0.04s for one frame on cpu
-  // check device
-  CHECK_INPUT(points);
-
-  at::cuda::CUDAGuard device_guard(points.device());
-
-  const int num_points = points.size(0);
-  const int num_features = points.size(1);
-
-  const float voxel_x = voxel_size[0];
-  const float voxel_y = voxel_size[1];
-  const float voxel_z = voxel_size[2];
-  const float coors_x_min = coors_range[0];
-  const float coors_y_min = coors_range[1];
-  const float coors_z_min = coors_range[2];
-  const float coors_x_max = coors_range[3];
-  const float coors_y_max = coors_range[4];
-  const float coors_z_max = coors_range[5];
-
-  const int grid_x = round((coors_x_max - coors_x_min) / voxel_x);
-  const int grid_y = round((coors_y_max - coors_y_min) / voxel_y);
-  const int grid_z = round((coors_z_max - coors_z_min) / voxel_z);
-
-  const int col_blocks = at::cuda::ATenCeilDiv(num_points, threadsPerBlock);
-  dim3 blocks(col_blocks);
-  dim3 threads(threadsPerBlock);
-  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-
-  AT_DISPATCH_ALL_TYPES(points.scalar_type(), "dynamic_voxelize_kernel", [&] {
-    dynamic_voxelize_kernel<scalar_t, int><<<blocks, threads, 0, stream>>>(
-        points.contiguous().data_ptr<scalar_t>(),
-        coors.contiguous().data_ptr<int>(), voxel_x, voxel_y, voxel_z,
-        coors_x_min, coors_y_min, coors_z_min, coors_x_max, coors_y_max,
-        coors_z_max, grid_x, grid_y, grid_z, num_points, num_features, NDim);
-  });
   cudaDeviceSynchronize();
   AT_CUDA_CHECK(cudaGetLastError());
-
-  return;
 }
 
-}  // namespace voxelization
+} // namespace voxelization

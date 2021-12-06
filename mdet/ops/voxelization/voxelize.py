@@ -2,6 +2,7 @@
 import torch
 from torch import nn
 from torch.autograd import Function
+from .voxelization import OpVoxelization
 
 
 class _Voxelize(Function):
@@ -13,7 +14,7 @@ class _Voxelize(Function):
                 voxel_size,
                 max_points=35,
                 max_voxels=20000,
-                reduce_type='none'):
+                reduce_type=0):
         """convert kitti points NxD(D>=3) to voxels.
 
         Args:
@@ -42,18 +43,13 @@ class _Voxelize(Function):
         point_num = points.new_zeros(size=(max_voxels, ), dtype=torch.int)
         voxel_num = points.new_zeros(size=(), dtype=torch.int)
 
-        __Voxelize(points, point_range, voxel_size, max_points, max_voxels, reduce_type,
+        OpVoxelization(points, point_range, voxel_size, max_points, max_voxels, reduce_type,
                    voxels, coords, point_num, voxel_num)
 
         return voxels, coords, point_num, voxel_num
 
     @staticmethod
-    def symbolic(g, points, voxel_size, coors_range, max_points, max_voxels, deterministic):
-        if max_points == -1 or max_voxels == -1:
-            output_num = 1
-        else:
-            output_num = 4
-
+    def symbolic(g, points, voxel_size, coors_range, max_points, max_voxels, reduce_type):
         return g.op(
             'custom_ops::Voxelization',
             points,
@@ -61,8 +57,8 @@ class _Voxelize(Function):
             point_range_f=coors_range,
             max_points_i=max_points,
             max_voxels_i=max_voxels,
-            deterministic_i=deterministic,
-            outputs=output_num)
+            reduce_type_i=reduce_type,
+            outputs=4)
 
 
 Voxelize = _Voxelize.apply

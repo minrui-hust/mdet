@@ -4,7 +4,7 @@
 namespace voxelization {
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("__Voxelize", &__Voxelize, "voxelization");
+  m.def("OpVoxelization", &OpVoxelization, "voxelization");
 }
 
 } // namespace voxelization
