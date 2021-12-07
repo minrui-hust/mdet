@@ -14,10 +14,7 @@ class BaseModule(nn.Module):
         self.set_mode('train')
 
     def set_eval(self):
-        self.set_mode('val')
-
-    def set_test(self):
-        self.set_mode('test')
+        self.set_mode('eval')
 
     def set_infer(self):
         self.set_mode('infer')
@@ -25,7 +22,7 @@ class BaseModule(nn.Module):
     def set_mode(self, mode):
         if mode in ['train']:
             self.train()
-        if mode in ['val', 'test', 'infer']:
+        if mode in ['eval', 'infer']:
             self.eval()
 
         for m in self.children():
@@ -35,23 +32,18 @@ class BaseModule(nn.Module):
     def forward(self, *args, **kwargs):
         if self.mode == 'train':
             return self.forward_train(*args, **kwargs)
-        elif self.mode == 'val':
-            return self.forward_val(*args, **kwargs)
-        elif self.mode == 'test':
-            return self.forward_test(*args, **kwargs)
+        elif self.mode == 'eval':
+            return self.forward_eval(*args, **kwargs)
         elif self.mode == 'infer':
-            return self.forward_export(*args, **kwargs)
+            return self.forward_infer(*args, **kwargs)
         else:
             raise NotImplementedError
 
     def forward_train(self, *args, **kwargs):
         raise NotImplementedError
 
-    def forward_val(self, *args, **kwargs):
+    def forward_eval(self, *args, **kwargs):
         return self.forward_train(*args, **kwargs)
 
-    def forward_test(self, *args, **kwargs):
-        return self.forward_train(*args, **kwargs)
-
-    def forward_export(self, *args, **kwargs):
+    def forward_infer(self, *args, **kwargs):
         return self.forward_train(*args, **kwargs)

@@ -8,22 +8,38 @@ class Runner(pl.LightningModule):
 
         self.config = config
 
-        self.model = FI.create(config['model'])
+        # train
+        self.train_model = FI.create(config['model']['train'])
         self.loss = FI.create(config['loss'])
-        self.post_process = FI.create(config['post_process'])
-
-        self.train_loader = FI.create(self.config['train_loader'])
-        self.val_loader = FI.create(self.config['val_loader'])
-        self.test_loader = FI.create(self.config['test_loader'])
-
         self.optimizer = FI.create(self.config['optimizer'])
         self.lr_scheduler = FI.create(self.config['lr_scheduler'])
+        self.train_loader = FI.create(self.config['data']['train'])
+
+        # eval(val, test)
+        self.eval_model = FI.create(config['model']['eval'])
+        self.eval_output = FI.create(config['output']['eval'])
+        self.val_loader = FI.create(self.config['data']['val'])
+        self.test_loader = FI.create(self.config['data']['test'])
+
+        # infer
+        self.infer_model = FI.create(config['model']['infer'])
+        self.ifner_output = FI.create(config['output']['infer'])
+
+        # set model state
+        self.train_model.set_train()
+        self.eval_model.set_eval()
+        self.infer_model.set_infer()
+
+        # eval and infer track the parameters of training
+        for p_train, p_eval, p_infer in zip(self.train_model.parameters(), self.eval_model.parameters(), self.infer_model.parameters()):
+            p_eval = p_train
+            p_infer = p_train
 
     def forward(self, batch):
-        return self.model(batch)
+        pass
 
     def training_step(self, batch, batch_idx):
-        out = self.model(batch)
+        out = self.train_model(batch)
         loss = self.loss(out, batch)
         return loss  # loss is a single tensor or a dict, if it is a dict, it must has key 'loss'
 
@@ -31,24 +47,19 @@ class Runner(pl.LightningModule):
         pass
 
     def validation_step(self, batch, batch_idx):
-        out = self.model(batch)
-        result = self.post_process(out, batch)
+        out = self.eval_model(batch)
+        result = self.eval_output(out, batch)
         return result
 
     def validation_epoch_end(self, epoch_output):
-        # format
-
-        # evaluate
-
         pass
 
     def test_step(self, batch, batch_idx):
-        out = self.model(batch)
-        result = self.post_process(out, batch)
+        out = self.eval_model(batch)
+        result = self.eval_output(out, batch)
         return result
 
     def test_epoch_end(self, epoch_output):
-        # format
         pass
 
     def train_dataloader(self):
