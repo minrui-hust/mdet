@@ -36,7 +36,7 @@ class PillarFeatureNet(BaseModule):
         self.voxel_reso = (int(math.floor((point_range[3]-point_range[0])/voxel_size[0])), 
                            int(math.floor((point_range[4]-point_range[1])/voxel_size[1])))
 
-    def forward(self, voxelization_result):
+    def forward_train(self, voxelization_result):
         """Forward function.
 
         Args:
@@ -53,7 +53,7 @@ class PillarFeatureNet(BaseModule):
         pillar_feature = self.construct_pillar(voxels, coords, point_nums)
 
         # pass through pfn layers
-        mask = construct_mask(point_nums, voxels.size(1), inverse=True)
+        mask = construct_mask(point_nums, voxels.size(2), inverse=True)
         for pfn in self.pfn_layers:
             pillar_feature = pfn(pillar_feature, mask)
 
@@ -87,7 +87,7 @@ class PillarFeatureNet(BaseModule):
         Construct pillar from raw points in a voxel, invalid points has value of zero
         voxels: [batch_size, max_pillar_num, max_point_num, point_dimension]
         coords: [batch_size, max_pillar_num, 3], in z,y,x order
-        point_nums: [batch_size]
+        point_nums: [batch_size, max_pillar_num]
         '''
 
         position = voxels[...,:3]
@@ -99,19 +99,19 @@ class PillarFeatureNet(BaseModule):
             elif feat_name == 'position': # original point position
                 feature_list.append(position)
             elif feat_name == 'mean_offset': # offset to pillar mean
-               pillar_mean = position.sum(dim=1, keepdim=True) / point_nums.type_as(voxels).view(-1, 1, 1)
-               mean_offset = position - pillar_mean
-               feature_list.append(mean_offset)
+                pillar_mean = position.sum(dim=1, keepdim=True) / point_nums.type_as(voxels).unsqueeze(-1).unsqueeze(-1)
+                mean_offset = position - pillar_mean
+                feature_list.append(mean_offset)
             elif feat_name == 'center_offset': # offset to voxel center
                 voxel_size = torch.tensor([self.voxel_size[0], self.voxel_size[1]], 
                         dtype=voxels.dtype, device=voxels.device)
                 voxel_offset = torch.tensor([self.voxel_offset[0], self.voxel_offset[1]], 
                         dtype=voxels.dtype, device=voxels.device)
                 pillar_center = coords[..., [2, 1]].type_as(voxels) * voxel_size + voxel_offset
-                center_offset = position[..., :2] - pillar_center
+                center_offset = position[..., :2] - pillar_center.unsqueeze(2)
                 feature_list.append(center_offset)
             elif feat_name == 'distance': # distance to origin
-                distance = torch.norm(position, 2, 2, keepdim=True)
+                distance = torch.norm(position, 2, -1, keepdim=True)
                 feature_list.append(distance)
             else:
                 raise NotImplementedError
@@ -130,7 +130,7 @@ class PillarFeatureNet(BaseModule):
                 dtype=pillar_feature.dtype, device=pillar_feature.device)
         for i in range(batch_size):
             coord = coords[i, :voxel_nums[i]]
-            index = coord[:, 1] * w + coord[:, 2]
+            index = (coord[:, 1] * w + coord[:, 2]).long()
             feat = pillar_feature[i, :voxel_nums[i]]
             canvas[i, :, index] = feat.t()
 
@@ -158,13 +158,13 @@ class PFNLayer(nn.Module):
         x = self.norm(x)
         x = F.relu(x, inplace=True)
 
-        if mask:
+        if mask is not None:
             x.masked_fill_(mask.unsqueeze(-1), float('-inf'))
 
-        x_max = torch.max(x, dim=1, keepdim=True)[0]
+        x_max = torch.max(x, dim=-2, keepdim=True)[0]
 
-        if self.last_vfe:
-            return x_max.squeeze(1)
+        if self.last_pfn:
+            return x_max.squeeze(-2)
         else:
             return torch.cat([x, x_max.expand_as(x)], dim=-1)
 

@@ -12,7 +12,7 @@ class _Voxelize(Function):
                 points,
                 point_range,
                 voxel_size,
-                max_points=35,
+                max_points=32,
                 max_voxels=20000,
                 reduce_type=0):
         """convert kitti points NxD(D>=3) to voxels.

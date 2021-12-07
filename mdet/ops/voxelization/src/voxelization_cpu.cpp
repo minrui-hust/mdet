@@ -42,12 +42,15 @@ void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
     // get voxel index
     auto &voxel_idx =
         voxel_coord_to_idx[voxel_coord[0]][voxel_coord[1]][voxel_coord[2]];
-    if (voxel_idx == -1) {              // new voxel may need to create
+    if (voxel_idx == -1) {
       if ((*voxel_num) >= max_voxels) { // max voxel num reached
         continue;
-      } else {
+      } else { // new voxel
         voxel_idx = *voxel_num;
         ++(*voxel_num);
+        for (auto j = 0u; j < NDim; ++j) {
+          coords[voxel_idx][j] = voxel_coord[j];
+        }
       }
     }
 
@@ -55,7 +58,9 @@ void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
     if (voxel_point_num >= max_points) { // max point num of this voxel reached
       continue;
     } else { // copy point into voxel and increase the point_num of this voxel
-      voxels[voxel_idx][voxel_point_num] = points[i];
+      for (auto j = 0u; j < points.size(1); ++j) {
+        voxels[voxel_idx][voxel_point_num][j] = points[i][j];
+      }
       ++voxel_point_num;
     }
   }

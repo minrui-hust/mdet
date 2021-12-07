@@ -17,14 +17,8 @@ dataset_config = dict(
 
 dataset = FI.create(dataset_config)
 
-for _ in range(100):
-    voxels, coords, point_num, voxel_num = Voxelize(torch.from_numpy(dataset[300]['pcd']).cpu(), [-40,-40,-5,40,40,5], [0.32,0.32,10])
-
-print('cpu done')
-
-for _ in range(100):
-    voxels, coords, point_num, voxel_num = Voxelize(torch.from_numpy(dataset[300]['pcd']).cuda(), [-40,-40,-5,40,40,5], [0.32,0.32,10])
-print('gpu done')
+voxels, coords, point_num, voxel_num = Voxelize(torch.from_numpy(dataset[300]['pcd']).cpu(), [-40,-40,-5,40,40,5], [0.32,0.32,10])
 
 
+voxels, coords, point_num, voxel_num = Voxelize(torch.from_numpy(dataset[300]['pcd']).cuda(), [-40,-40,-5,40,40,5], [0.32,0.32,10])
 

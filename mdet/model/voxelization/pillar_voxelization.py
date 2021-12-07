@@ -6,7 +6,7 @@ from mdet.utils.factory import FI
 
 @FI.register
 class PillarVoxelization(BaseModule):
-    def __init__(self, voxel_size, point_range, max_points, max_voxels, reduce_type=0):
+    def __init__(self, point_range, voxel_size, max_points, max_voxels, reduce_type=0):
         super().__init__()
 
         self.voxel_size = voxel_size
@@ -16,5 +16,5 @@ class PillarVoxelization(BaseModule):
         self.reduce_type = reduce_type
 
     @torch.no_grad()
-    def forward(self, points):
-        return Voxelize(points, self.voxel_size, self.point_range, self.voxel_size, self.max_points, self.max_voxels, self.reduce_type)
+    def forward_train(self, points):
+        return Voxelize(points, self.point_range, self.voxel_size, self.max_points, self.max_voxels, self.reduce_type)
