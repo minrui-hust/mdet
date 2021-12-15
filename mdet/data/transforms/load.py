@@ -27,20 +27,31 @@ class WaymoLoadSweep(object):
 
 @FI.register
 class WaymoLoadAnno(object):
-    def __init__(self, **kwargs):
-        pass
+    def __init__(self, categories=[]):
+        self.category_raw_to_task = {}
+        self.category_id_to_name = []
+        for task_specific_category, (category_name, raw_category_list) in enumerate(categories):
+            self.category_id_to_name.append(category_name)
+            for raw_category in raw_category_list:
+                self.category_raw_to_task[raw_category] = task_specific_category
 
     def __call__(self, sample, info):
         anno = io.load(info['anno_path'])
 
-        boxes = np.stack([object['box'] for object in anno['objects']], axis=0)
-        types = np.array([object['type']
-                         for object in anno['objects']], dtype=np.int32)
-        num_points = np.array([object['num_points']
-                              for object in anno['objects']], dtype=np.int32)
+        boxes, categories, num_points = [], [], []
+        for object in anno['objects']:
+            raw_category = object['type']
+            if raw_category in self.category_raw_to_task:
+                boxes.append(object['box'])
+                categories.append(self.category_raw_to_task[raw_category])
+                num_points.append(object['num_points'])
+        boxes = np.stack(boxes, axis=0)
+        categories = np.array(categories, dtype=np.int32)
+        num_points = np.array(num_points, dtype=np.int32)
 
-        sample.update(
-            {'gt': {'boxes': boxes, 'types': types, 'num_points': num_points}})
+        sample['gt'] = {'boxes': boxes,
+                        'categories': categories, 'num_points': num_points}
+        sample['category_id_to_name'] = self.category_id_to_name
 
 
 @FI.register

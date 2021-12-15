@@ -10,54 +10,42 @@ class Runner(pl.LightningModule):
 
         # train
         self.train_model = FI.create(config['model']['train'])
-        self.loss = FI.create(config['loss'])
+        self.train_loader = FI.create(self.config['data']['train'])
         self.optimizer = FI.create(self.config['optimizer'])
         self.lr_scheduler = FI.create(self.config['lr_scheduler'])
-        self.train_loader = FI.create(self.config['data']['train'])
+        self.train_model.set_train()
 
         # eval(val, test)
         self.eval_model = FI.create(config['model']['eval'])
-        self.eval_output = FI.create(config['output']['eval'])
         self.val_loader = FI.create(self.config['data']['val'])
         self.test_loader = FI.create(self.config['data']['test'])
-
-        # infer
-        self.infer_model = FI.create(config['model']['infer'])
-        self.ifner_output = FI.create(config['output']['infer'])
-
-        # set model state
-        self.train_model.set_train()
         self.eval_model.set_eval()
+
+        # infer(export for depoly)
+        self.infer_model = FI.create(config['model']['infer'])
         self.infer_model.set_infer()
 
-        # eval and infer track the parameters of training
-        for p_train, p_eval, p_infer in zip(self.train_model.parameters(), self.eval_model.parameters(), self.infer_model.parameters()):
-            p_eval = p_train
-            p_infer = p_train
+        # eval and infer track the training (use same parameters)
+        self.track_model(self.train_model, self.eval_model):
+        self.track_model(self.train_model, self.infer_model):
 
     def forward(self, batch):
-        pass
+        raise NotImplementedError
 
     def training_step(self, batch, batch_idx):
-        out = self.train_model(batch)
-        loss = self.loss(out, batch)
-        return loss  # loss is a single tensor or a dict, if it is a dict, it must has key 'loss'
+        return self.train_model(batch)
 
     def training_epoch_end(self, epoch_output):
         pass
 
     def validation_step(self, batch, batch_idx):
-        out = self.eval_model(batch)
-        result = self.eval_output(out, batch)
-        return result
+        return self.eval_model(batch)
 
     def validation_epoch_end(self, epoch_output):
         pass
 
     def test_step(self, batch, batch_idx):
-        out = self.eval_model(batch)
-        result = self.eval_output(out, batch)
-        return result
+        return self.eval_model(batch)
 
     def test_epoch_end(self, epoch_output):
         pass
@@ -73,3 +61,17 @@ class Runner(pl.LightningModule):
 
     def configure_optimizers(self):
         return [self.optimizer], [self.lr_scheduler]
+
+    def track_model(self, m_target, m_follow):
+        # track parameters
+        for name in m_follow._parameters:
+            m_follow._parameters[name] = m_target._parameters[name]
+
+        # track buffers
+        for name in m_follow._buffers:
+            m_follow._buffers[name] = m_target._buffers[name]
+
+        # recursively track submodules
+        for name in m_follow._modules:
+            self.track_model(
+                m_target._modules[name], m_follow._modules[name])

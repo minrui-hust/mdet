@@ -32,7 +32,7 @@ def summary(root_path, split, nsweep=5):
             sweeps.append(sweep)
 
         info = {
-            'anno_path': anno_path,
+            'anno_path': os.path.join(root_path, split, 'annos', f'{cur_seq_id}-{cur_frame_id}.pkl'),
             'sweeps': sweeps,
         }
         infos.append(info)

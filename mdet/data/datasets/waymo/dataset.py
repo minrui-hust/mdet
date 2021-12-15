@@ -6,8 +6,8 @@ from mdet.data.datasets.base_dataset import BaseDataset
 
 @FI.register
 class WaymoDataset(BaseDataset):
-    def __init__(self, info_path, transforms_cfg=[], filter_cfg=None):
-        super().__init__(info_path, transforms_cfg, filter_cfg)
+    def __init__(self, info_path, transforms=[], filter=None):
+        super().__init__(info_path, transforms, filter)
 
     def format(self, result, output_path):
         raise NotImplementedError

@@ -24,6 +24,7 @@ class BaseModule(nn.Module):
             self.train()
         if mode in ['eval', 'infer']:
             self.eval()
+        self.mode = mode
 
         for m in self.children():
             if isinstance(m, BaseModule):

@@ -27,7 +27,7 @@ class Factory(object):
         if not isinstance(cfg, dict):
             raise TypeError(f'cfg must be a dict, but got {type(cfg)}')
         if 'type' not in cfg:
-            raise KeyError(f'`cfg` contain the key "type", but got {cfg}')
+            raise KeyError(f'`cfg` must contain the key "type", but got {cfg}')
 
         args = cfg.copy()
         component_name = args.pop('type')

@@ -1,21 +1,22 @@
 import torch.utils.data as pdata
 from mdet.utils.factory import FI
 import mdet.utils.io as io
+from mdet.data.sample import Sample
 
 
 @FI.register
 class BaseDataset(pdata.Dataset):
-    def __init__(self, info_path, transforms_cfg, filter_cfg):
+    def __init__(self, info_path, transforms, filter=None):
         super().__init__()
 
         self.info_path = info_path
-        if transforms_cfg:
-            self.transforms = [FI.create(cfg) for cfg in transforms_cfg]
+        if transforms:
+            self.transforms = [FI.create(cfg) for cfg in transforms]
         else:
             self.transforms = None
 
-        if filter_cfg:
-            self.filter = FI.create(filter_cfg)
+        if filter:
+            self.filter = FI.create(filter)
         else:
             self.filter = lambda x: True
 
@@ -28,7 +29,7 @@ class BaseDataset(pdata.Dataset):
 
     def __getitem__(self, idx):
         info = self.sample_infos[idx]
-        sample = {}
+        sample = Sample()
         self.__pre_transform(sample, info)
         self.__do_transform(sample, info)
         self.__post_transform(sample, info)
