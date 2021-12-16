@@ -24,7 +24,6 @@ def parse_args():
 def main():
     args = parse_args()
     config_name, _ = os.path.splitext(os.path.basename(args.config))
-
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
 
@@ -60,7 +59,7 @@ def main():
     )
 
     # do fit
-    trainer.fit(pl_module)
+    trainer.fit(pl_module, ckpt_path=args.ckpt)
 
 
 if __name__ == '__main__':
