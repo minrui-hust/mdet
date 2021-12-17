@@ -1,4 +1,5 @@
 import os
+import os.path as osp
 import argparse
 from mdet.utils.pl_wrapper import PlWrapper
 import mdet.utils.config_loader as ConfigLoader
@@ -15,7 +16,7 @@ def parse_args():
     parser.add_argument(
         '--ckpt', help='the checkpoint file to resume from')
     parser.add_argument(
-        '--workspace', default='./log', help='the workspace folder output logs store')
+        '--workspace', default='./workspace', help='the workspace folder output logs store')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
     return parser.parse_args()
@@ -34,18 +35,35 @@ def main():
     max_epochs = config['runtime']['max_epochs']
     print(f'Total epochs: {max_epochs}')
 
+    # recovery version from checkpoint path
+    version = None
+    if args.ckpt is not None:
+        assert(osp.exists(args.ckpt) and osp.isfile(args.ckpt))
+        version_str = osp.basename(osp.dirname(args.ckpt))
+        if version_str.startswith('version_'):
+            version = int(version_str.split('_')[1])
+
     # setup loggers
     logger_list = []
     for logger_cfg in config['runtime']['logging']['logger']:
         cfg = logger_cfg.copy()
         type = cfg.pop('type')
         logger_list.append(loggers.__dict__[type](
-            args.workspace, name=config_name, **cfg))
+            osp.join(args.workspace, 'log'), name=config_name, version=version, **cfg))
+        if version is None:
+            version = logger_list[-1].version
+
+    # get experiment_version from first logger
+    experiment_version = logger_list[0].version
+    if not isinstance(experiment_version, str):
+        experiment_version = f'version_{experiment_version}'
 
     # callbacks
     callbacks = []
     # make checkpoint path identical with log
-    callbacks.append(ModelCheckpoint(dirpath=args.workspace))
+    checkpoint_folder = osp.join(
+        args.workspace, 'checkpoint', config_name, experiment_version)
+    callbacks.append(ModelCheckpoint(dirpath=checkpoint_folder))
 
     # setup trainner
     trainer = pl.Trainer(
@@ -56,6 +74,7 @@ def main():
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
+        overfit_batches=100,
     )
 
     # do fit

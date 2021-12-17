@@ -58,7 +58,7 @@ class CenterPostProcess(BaseModule):
         r'''
         forward_eval decode for evaluation
         '''
-        raise NotImplementedError
+        return result
 
     def forward_infer(self, result, batch):
         r'''

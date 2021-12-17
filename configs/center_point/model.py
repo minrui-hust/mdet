@@ -80,6 +80,7 @@ dataloader_train = dict(
             dict(type='WaymoLoadSweep', load_nsweep=1),
             dict(type='MergeSweep'),
             dict(type='WaymoLoadAnno', categories=categories),
+            dict(type='RangeFilter', point_range=point_range),
             dict(type='CenterAssigner', point_range=point_range, grid_size=out_grid_size,
                  grid_reso=out_grid_reso, min_gaussian_radius=2, min_gaussian_overlap=0.5),
         ],
@@ -132,10 +133,10 @@ fit = dict(
                    ),
 )
 
-runtime = dict(max_epochs=2,
+runtime = dict(max_epochs=4,
                logging=dict(
                    logger=[
-                       #  dict(type='TensorBoardLogger',),
+                       dict(type='TensorBoardLogger',),
                        dict(type='CSVLogger',),
                    ],
                ),

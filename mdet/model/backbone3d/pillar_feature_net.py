@@ -101,7 +101,7 @@ class PillarFeatureNet(BaseModule):
                 feature_list.append(position)
             elif feat_name == 'mean_offset':  # offset to pillar mean
                 pillar_mean = position.sum(
-                    dim=1, keepdim=True) / point_nums.type_as(voxels).unsqueeze(-1).unsqueeze(-1)
+                    dim=1, keepdim=True) / (point_nums.type_as(voxels).unsqueeze(-1).unsqueeze(-1) + 1e-6)
                 mean_offset = position - pillar_mean
                 feature_list.append(mean_offset)
             elif feat_name == 'center_offset':  # offset to voxel center
@@ -157,7 +157,6 @@ class PFNLayer(nn.Module):
         self.norm = nn.LayerNorm(self.hidden_channels)
 
     def forward(self, x, mask=None):
-
         x = self.linear(x)
         x = self.norm(x)
         x = F.relu(x, inplace=True)

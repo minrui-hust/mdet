@@ -37,9 +37,7 @@ class PlWrapper(pl.LightningModule):
             if name != 'loss':
                 value.detach_()
 
-        print(loss_dict['loss'])
-
-        # TODO: logging
+        self.log('train_loss', loss_dict['loss'])
 
         return loss_dict
 

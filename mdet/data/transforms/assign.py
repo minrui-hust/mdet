@@ -27,9 +27,9 @@ class CenterAssigner(object):
         category_num = len(sample['category_id_to_name'])
 
         # offset
-        cords_x = np.round(
+        cords_x = np.floor(
             (boxes[:, 0] - self.point_range[0]) / self.grid_size[0])
-        cords_y = np.round(
+        cords_y = np.floor(
             (boxes[:, 1] - self.point_range[1]) / self.grid_size[1])
         cords = np.stack((cords_x, cords_y), axis=-1).astype(np.int32)
 
@@ -58,6 +58,11 @@ class CenterAssigner(object):
             category = categories[i]
             center = cords[i]
 
+            # skip object out of bound
+            if not(center[0] >= 0 and center[0] < self.grid_reso[0] and
+                    center[1] >= 0 and center[1] < self.grid_reso[1]):
+                continue
+
             l, w = box[3] / self.grid_size[0], box[4] / self.grid_size[1]
             radius = gaussian_radius((l, w), self.min_gaussian_overlap)
             radius = max(self.min_gaussian_radius, int(radius))
@@ -67,6 +72,6 @@ class CenterAssigner(object):
                                  height=height,
                                  size=size,
                                  heading=heading,
-                                 heatmap=heatmap,
                                  positive_indices=positive_indices,
+                                 heatmap=heatmap,
                                  ))

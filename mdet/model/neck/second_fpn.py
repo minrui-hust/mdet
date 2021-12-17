@@ -48,19 +48,16 @@ class SECONDFPN(BaseModule):
                     bias=False)
 
             deblock = nn.Sequential(upsample_layer,
-                                    nn.BatchNorm2d(out_channel, eps=1e-3, momentum=0.01),
+                                    nn.BatchNorm2d(
+                                        out_channel, eps=1e-3, momentum=0.01),
                                     nn.ReLU(inplace=True))
             deblocks.append(deblock)
         self.deblocks = nn.ModuleList(deblocks)
 
-
     def forward(self, x):
         assert len(x) == len(self.deblocks)
 
-        ups = [deblock(d) for d, deblock in zip(x, self.deblocks) ] 
+        ups = [deblock(d) for d, deblock in zip(x, self.deblocks)]
+        out = torch.cat(ups, dim=1)
 
-        if len(ups) >1:
-            return torch.cat(ups, dim=1)
-        else:
-            return ups[0]
-            
+        return out

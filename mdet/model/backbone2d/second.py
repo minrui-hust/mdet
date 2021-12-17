@@ -30,13 +30,16 @@ class SECOND(BaseModule):
         blocks = []
         for i, layer_num in enumerate(layer_nums):
             block = [
-                nn.Conv2d(in_channels[i], out_channels[i], 3, stride=layer_strides[i],padding=1),
+                nn.Conv2d(in_channels[i], out_channels[i],
+                          3, stride=layer_strides[i], padding=1),
                 nn.BatchNorm2d(out_channels[i], eps=1e-3, momentum=0.01),
                 nn.ReLU(inplace=True),
             ]
             for _ in range(layer_num):
-                block.append(nn.Conv2d(out_channels[i], out_channels[i], 3, padding=1))
-                block.append(nn.BatchNorm2d(out_channels[i], eps=1e-3, momentum=0.01))
+                block.append(
+                    nn.Conv2d(out_channels[i], out_channels[i], 3, padding=1))
+                block.append(nn.BatchNorm2d(
+                    out_channels[i], eps=1e-3, momentum=0.01))
                 block.append(nn.ReLU(inplace=True))
             block = nn.Sequential(*block)
             blocks.append(block)
@@ -47,4 +50,5 @@ class SECOND(BaseModule):
         for block in self.blocks:
             x = block(x)
             outs.append(x)
+
         return outs
