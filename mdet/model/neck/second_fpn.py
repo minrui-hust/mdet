@@ -54,7 +54,7 @@ class SECONDFPN(BaseModule):
             deblocks.append(deblock)
         self.deblocks = nn.ModuleList(deblocks)
 
-    def forward(self, x):
+    def forward_train(self, x):
         assert len(x) == len(self.deblocks)
 
         ups = [deblock(d) for d, deblock in zip(x, self.deblocks)]

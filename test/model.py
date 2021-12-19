@@ -11,7 +11,7 @@ from matplotlib.patches import Rectangle
 from torch.utils.data.dataloader import DataLoader
 
 
-categories = [('Pedestrian', [2]), ('Cyclist', [4]), ('Vehicle', [1])]
+types = [('Pedestrian', [2]), ('Cyclist', [4]), ('Vehicle', [1])]
 
 point_range = [-64, -64, -5, 64, 64, 5]
 voxel_size = [0.32, 0.32, 10]
@@ -20,37 +20,48 @@ voxel_reso = [400, 400, 1]
 out_grid_size = [0.64, 0.64]
 out_grid_reso = [200, 200]
 
+codec = dict(
+    type='CenterPointCodec',
+    point_range=point_range,
+    grid_size=out_grid_size,
+    grid_reso=out_grid_reso,
+    min_gaussian_radius=2,
+    min_gaussian_overlap=0.5,
+)
+
 dataset_config = dict(
-    type='WaymoDataset',
+    type='WaymoDet3dDataset',
     info_path='/data/tmp/waymo/training_info.pkl',
+    load_opt=dict(
+        load_dim=5,
+        num_sweeps=1,
+        types=types,
+    ),
     transforms=[
-        dict(type='WaymoLoadSweep', load_nsweep=1),
-        dict(type='MergeSweep'),
-        dict(type='WaymoLoadAnno', categories=categories),
-        dict(type='CenterAssigner', point_range=point_range, grid_size=out_grid_size,
-             grid_reso=out_grid_reso, min_gaussian_radius=2, min_gaussian_overlap=0.5),
+        dict(type='RangeFilter', point_range=point_range),
+        codec,
     ],
 )
 dataset = FI.create(dataset_config)
 
-collator_config = dict(type='SimpleCollator',
-                       rules={
-                           '.gt.offset': dict(type='cat'),
-                           '.gt.height': dict(type='cat'),
-                           '.gt.size': dict(type='cat'),
-                           '.gt.heading': dict(type='cat'),
-                           '.gt.heatmap': dict(type='stack'),
-                           '.gt.categories': dict(type='cat'),
-                           '.gt.positive_indices': dict(type='cat',
-                                                        dim=0,
-                                                        pad=dict(pad_width=((0, 0), (1, 0)),
-                                                                 ),
-                                                        inc_func=lambda x: np.array(
-                                                            [1, 0, 0], dtype=np.int32),
-                                                        ),
-                           '.category_id_to_name': dict(type='unique'),
-                       },
-                       )
+collator_config = dict(
+    type='SimpleCollator',
+    rules={
+        '.anno.offset': dict(type='cat'),
+        '.anno.height': dict(type='cat'),
+        '.anno.size': dict(type='cat'),
+        '.anno.heading': dict(type='cat'),
+        '.anno.heatmap': dict(type='stack'),
+        '.anno.types': dict(type='cat'),
+        '.anno.positive_indices': dict(
+            type='cat',
+            dim=0,
+            pad=dict(pad_width=((0, 0), (1, 0)),),
+            inc_func=lambda x: np.array([1, 0, 0], dtype=np.int32),
+        ),
+        '.type_name': dict(type='unique'),
+    },
+)
 collator = FI.create(collator_config)
 
 dataloader = DataLoader(dataset, 2, collate_fn=collator)
@@ -95,23 +106,34 @@ model_config = dict(
                      'heading': (2, 2)},  # (output_channel, num_conv)
               init_bias=-2.20,
               ),
-    post_process=dict(type='CenterPostProcess',
-                      head_weight={'heatmap': 1.0,
-                                   'offset': 1.0,
-                                   'height': 1.0,
-                                   'size': 1.0,
-                                   'heading': 1.0,
-                                   },
-                      alpha=4.0,
-                      beta=2.0,
-                      )
+    post_process=dict(
+        type='CenterPostProcess',
+        codec=codec,  # use the same one as dataset transforms
+        loss_cfg=dict(
+            head_weight={
+                'heatmap': 1.0,
+                'offset': 1.0,
+                'height': 1.0,
+                'size': 1.0,
+                'heading': 1.0,
+            },
+            alpha=4.0,
+            beta=2.0,
+        ),
+        nms_cfg=dict(
+            pre_num=512,
+            post_num=128,
+            overlap_thresh=0.1,
+        ),
+    )
 )
 model = FI.create(model_config)
 model.set_eval()
+model.cuda()
 
 
 for batch in dataloader:
-    batch.to('cpu')
+    batch.to('cuda')
     res = model(batch)
     print(res)
     break

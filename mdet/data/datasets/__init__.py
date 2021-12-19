@@ -1,1 +1,1 @@
-import mdet.data.datasets.waymo.dataset
+import mdet.data.datasets.waymo_det3d.dataset

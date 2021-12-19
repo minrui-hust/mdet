@@ -5,7 +5,7 @@ import numpy as np
 @FI.register
 class RangeFilter(object):
     r'''
-    Filter out the out of range object label
+    Filter out the out of range object
     '''
 
     def __init__(self, point_range):
@@ -17,7 +17,7 @@ class RangeFilter(object):
         x_max = self.point_range[3]
         y_max = self.point_range[4]
 
-        boxes = sample['gt']['boxes']
+        boxes = sample['anno'].boxes
 
         valid_indices = []
         for i, box in enumerate(boxes):
@@ -26,5 +26,5 @@ class RangeFilter(object):
             else:
                 valid_indices.append(i)
 
-        sample['gt']['boxes'] = sample['gt']['boxes'][valid_indices]
-        sample['gt']['categories'] = sample['gt']['categories'][valid_indices]
+        # update sample
+        sample['anno'] = sample['anno'][valid_indices]

@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -43,8 +44,10 @@ class BaseModule(nn.Module):
     def forward_train(self, *args, **kwargs):
         raise NotImplementedError
 
+    @torch.no_grad()
     def forward_eval(self, *args, **kwargs):
         return self.forward_train(*args, **kwargs)
 
+    @torch.no_grad()
     def forward_infer(self, *args, **kwargs):
         return self.forward_train(*args, **kwargs)

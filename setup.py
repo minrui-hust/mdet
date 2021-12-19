@@ -130,6 +130,13 @@ if __name__ == '__main__':
                     'src/voxelization_cpu.cpp',
                     'src/voxelization_cuda.cu',
                 ]),
+            make_cuda_ext(
+                name='iou3d',
+                module='mdet.ops.iou3d',
+                sources=[
+                    'src/iou3d.cpp',
+                    'src/iou3d_kernel.cu',
+                ]),
         ],
         cmdclass={'build_ext': BuildExtension},
         zip_safe=False)

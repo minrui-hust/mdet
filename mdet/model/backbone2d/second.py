@@ -45,7 +45,7 @@ class SECOND(BaseModule):
             blocks.append(block)
         self.blocks = nn.ModuleList(blocks)
 
-    def forward(self, x):
+    def forward_train(self, x):
         outs = []
         for block in self.blocks:
             x = block(x)

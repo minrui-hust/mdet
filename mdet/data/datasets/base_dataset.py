@@ -1,65 +1,134 @@
-import torch.utils.data as pdata
+from torch.utils.data import Dataset as TorchDataset
 from mdet.utils.factory import FI
 import mdet.utils.io as io
 from mdet.data.sample import Sample
+import open3d as o3d
+import numpy as np
 
 
-@FI.register
-class BaseDataset(pdata.Dataset):
-    def __init__(self, info_path, transforms, filter=None):
+class MDetDataset(TorchDataset):
+    r'''
+    Base class of all dataset in MDet
+    '''
+
+    def __init__(self, info_path, transforms=[], filter=None):
         super().__init__()
 
         self.info_path = info_path
-        if transforms:
-            self.transforms = [FI.create(cfg) for cfg in transforms]
-        else:
-            self.transforms = None
 
-        if filter:
-            self.filter = FI.create(filter)
-        else:
-            self.filter = lambda x: True
+        self.transforms = [FI.create(cfg) for cfg in transforms]
 
+        self.filter = FI.create(filter)
+
+        # load sample info
         sample_infos = io.load(self.info_path, format='pkl')
-        self.sample_infos = [
-            info for info in sample_infos if self.filter(info)]
+        self.sample_infos = [info for info in sample_infos if (
+            self.filter is None or self.filter(info))]
 
     def __len__(self):
         return len(self.sample_infos)
 
     def __getitem__(self, idx):
         info = self.sample_infos[idx]
-        sample = Sample()
-        self.__pre_transform(sample, info)
-        self.__do_transform(sample, info)
-        self.__post_transform(sample, info)
-        return sample
+        if isinstance(info, list):
+            sample_list = []
+            for i in info:
+                sample = Sample()
+                self.load(sample, i)
+                self.do_transform(sample, i)
+                sample_list.append(sample)
+            return sample_list
+        else:
+            sample = Sample()
+            self.load(sample, info)
+            self.do_transform(sample, info)
+            return sample
+
+    def load(self, sample, info):
+        r'''
+        Need override by derived class
+        '''
+        raise NotImplementedError
+
+    def do_transform(self, sample, info):
+        if self.transforms:
+            for t in self.transforms:
+                t(sample, info)
+
+    def plot(self, sample):
+        raise NotImplementedError
 
     def format(self, result, output_path):
         r'''
-        Format results into specific format for evaluation.
+        Format results into dataset specific format for evaluation and submission
         '''
-        pass
+        raise NotImplementedError
 
     def evaluate(self, predict_path, gt_path):
         r'''
         Evaluate  predictions
         '''
-        pass
+        raise NotImplementedError
 
-    def __pre_transform(self, sample, info):
+
+class MDet3dDataset(MDetDataset):
+    r'''
+    Base class of all 3d detection dataset
+    Sample format:{
+                   'pcd':Pointcloud
+                   'anno': Annotation3d
+                   'type_name': list of str
+                   'pred': Annotation3d, optional, filled by model prediction
+                  }
+    '''
+    TypePalette = np.array([[0.9, 0, 0],[0, 0.9, 0],[0, 0, 0.9]])
+
+    def __init__(self, info_path, transforms=None, filter=None):
+        super().__init__(info_path, transforms, filter)
+
+    def load(self, sample, info):
+        self.load_pcd(sample, info)
+        self.load_anno(sample, info)
+
+    def load_pcd(self, sample, info):
         r'''
-        Initialization before transforms, overload by inherits
+        load pcd into sample, store as standard pointcloud format
         '''
-        pass
+        raise NotImplementedError
 
-    def __do_transform(self, sample, info):
-        if self.transforms:
-            for t in self.transforms:
-                t(sample, info)
-
-    def __post_transform(self, sample, info):
+    def load_anno(self, sample, info):
         r'''
-        Cleaning after transforms, overload by inherits
+        load dataset specific annotation , return standard 3d annotation
         '''
+        raise NotImplementedError
+
+    def plot(self, sample):
+        r'''
+        plot standard 3d detection sample using open3d
+        '''
+        from mdet.utils.viz import Visualizer
+
+        vis = Visualizer()
+        vis.add_points(sample['pcd'].points)
+        box_color = self.TypePalette[sample['anno'].types%self.TypePalette.shape[0]]
+        box_label = [sample['type_name'][type_id] for type_id in sample['anno'].types ]
+        vis.add_box(sample['anno'].boxes, box_color=box_color, box_label=box_label)
+        vis.show()
+
+
+class MDet2dDataset(MDetDataset):
+    r'''
+    Base class of 2d detection dataset
+    '''
+
+    def __init__(self, info_path, transforms, filter=None):
+        super().__init__(info_path, transforms, filter)
+
+    def load(self, sample, info):
         pass
+
+    def load_img(self, img_path):
+        raise NotImplementedError
+
+    def load_anno(self, anno_path):
+        raise NotImplementedError
