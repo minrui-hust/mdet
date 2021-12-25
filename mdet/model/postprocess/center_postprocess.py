@@ -2,15 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mdet.utils.factory import FI
-from mdet.model import BaseModule
 import mdet.model.loss.loss as loss
 from functools import partial
 from mdet.core.annotation import Annotation3d
 from mdet.ops.iou3d import nms
+from mdet.model.postprocess.base_postprocess import BasePostProcess
 
 
 @FI.register
-class CenterPostProcess(BaseModule):
+class CenterPostProcess(BasePostProcess):
     def __init__(self, loss_cfg={}, nms_cfg={}, codec=None):
         super().__init__()
 
@@ -24,13 +24,13 @@ class CenterPostProcess(BaseModule):
             loss.focal_loss, alpha=loss_cfg['alpha'], beta=loss_cfg['beta'])
         self.criteria_regression = partial(F.l1_loss, reduction='mean')
 
-    def forward_train(self, result, batch):
+    def loss(self, result, batch):
         r'''
         forward_train calc loss
         '''
 
-        positive_index = batch['anno']['positive_indices'].long()
-        positive_class = batch['anno']['types'].long()
+        positive_index = batch['gt']['positive_indices'].long()
+        positive_class = batch['gt']['types'].long()
         positive_heatmap_index = torch.cat(
             [positive_index[:, [0]], positive_class.unsqueeze(-1), positive_index[:, 1:]], dim=-1)
 
@@ -39,13 +39,13 @@ class CenterPostProcess(BaseModule):
             if head_name == 'heatmap':
                 heatmap_prediction = self.safe_sigmoid(head_prediction)
                 loss = self.criteria_heatmap(
-                    heatmap_prediction, batch['anno'][head_name], positive_heatmap_index)
+                    heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             else:
                 # select the positive predictions
                 positive_prediction = head_prediction[positive_index[:,
                                                                      0], :, positive_index[:, 1], positive_index[:, 2]]
                 loss = self.criteria_regression(
-                    positive_prediction, batch['anno'][head_name])
+                    positive_prediction, batch['gt'][head_name])
             loss_dict[f'loss_{head_name}'] = loss
 
         # calc the total loss of different heads
@@ -61,7 +61,7 @@ class CenterPostProcess(BaseModule):
         return loss_dict
 
     @torch.no_grad()
-    def forward_eval(self, result, batch):
+    def eval(self, result):
         r'''
         decode, nms, return detection in standard format, which Annotation3d
         input:
@@ -112,11 +112,11 @@ class CenterPostProcess(BaseModule):
         return output
 
     @torch.no_grad()
-    def forward_infer(self, result, batch):
+    def infer(self, result):
         r'''
         forward_eval decode for deployment
         '''
-        raise NotImplementedError
+        self.eval(result)
 
     def safe_sigmoid(self, x):
         return torch.clamp(x.sigmoid(), min=1e-4, max=1-1e-4)

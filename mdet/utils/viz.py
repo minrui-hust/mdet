@@ -62,7 +62,7 @@ class Visualizer(object):
         self.pcd = pcd
 
 
-    def add_box(self, boxes, box_color=(0.8, 0.1, 0.1), box_label=None, paint_point_in_box=True):
+    def add_box(self, boxes, box_color=(0.8, 0.1, 0.1), box_label=None, paint_point_in_box=True, prefix=''):
         r'''
         Add bounding box to visualizer.
         '''
@@ -83,7 +83,7 @@ class Visualizer(object):
             o3d_box = o3d.geometry.OrientedBoundingBox(center, rotm, dim)
             line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(o3d_box)
             line_set.paint_uniform_color(color)
-            self.viz.add_geometry(f'box_{i}', line_set)
+            self.viz.add_geometry(f'{prefix}_box_{i}', line_set)
             if box_label is not None:
                 self.viz.add_3d_label(center, box_label[i])
 

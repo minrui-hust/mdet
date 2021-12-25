@@ -9,6 +9,10 @@ import pytorch_lightning as pl
 import pytorch_lightning.loggers as loggers
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
+r'''
+Train model
+'''
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train model')
@@ -22,8 +26,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
+def main(args):
     config_name, _ = os.path.splitext(os.path.basename(args.config))
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
@@ -32,7 +35,7 @@ def main():
     config = ConfigLoader.load(args.config)
     pl_module = PlWrapper(config)
 
-    max_epochs = config['runtime']['max_epochs']
+    max_epochs = config['runtime']['train']['max_epochs']
     print(f'Total epochs: {max_epochs}')
 
     # recovery version from checkpoint path
@@ -45,7 +48,7 @@ def main():
 
     # setup loggers
     logger_list = []
-    for logger_cfg in config['runtime']['logging']['logger']:
+    for logger_cfg in config['runtime']['train']['logger']:
         cfg = logger_cfg.copy()
         type = cfg.pop('type')
         logger_list.append(loggers.__dict__[type](
@@ -74,7 +77,6 @@ def main():
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
-        overfit_batches=100,
     )
 
     # do fit
@@ -82,4 +84,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(parse_args())

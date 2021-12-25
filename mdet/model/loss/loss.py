@@ -17,7 +17,7 @@ def focal_loss(predict, target, positive_index, alpha=2.0, beta=4.0):
     positive_prediction = predict[positive_index[:, 0],
                                   positive_index[:, 1], positive_index[:, 2], positive_index[:, 3]]
 
-    positive_loss = -(torch.pow(1 - positive_prediction, 2)
+    positive_loss = -(torch.pow(1 - positive_prediction, alpha)
                       * torch.log(positive_prediction)).sum()
 
     if positive_index.size(0) == 0:

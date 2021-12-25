@@ -9,8 +9,8 @@ from mdet.core.pointcloud import Pointcloud
 
 @FI.register
 class WaymoDet3dDataset(MDet3dDataset):
-    def __init__(self, info_path, load_opt={}, transforms=[], filter=None):
-        super().__init__(info_path, transforms, filter)
+    def __init__(self, info_path, load_opt={}, transforms=[], codec=None, filter=None):
+        super().__init__(info_path, transforms, codec, filter)
         self.load_opt = load_opt
 
         self.type_raw_to_task = {}
@@ -20,7 +20,16 @@ class WaymoDet3dDataset(MDet3dDataset):
             for raw_type in raw_type_list:
                 self.type_raw_to_task[raw_type] = task_specific_type
 
-    def load_pcd(self, sample, info):
+    def load_meta(self, sample, info):
+        anno = io.load(info['anno_path'])
+        frame_id = anno['frame_id']
+        seq_name = anno['seq_name']
+        sample_name = f'{seq_name}-{frame_id}'
+
+        # update sample's meta
+        sample['meta'] = dict(sample_name=sample_name)
+
+    def load_data(self, sample, info):
         sweep_info_list = info['sweeps']
         num_sweeps = self.load_opt['num_sweeps']
         load_dim = self.load_opt['load_dim']
@@ -44,31 +53,42 @@ class WaymoDet3dDataset(MDet3dDataset):
             tf = rigid.between(tf_map_vehicle0, tf_map_vehicle)
             pcds.append(rigid.transform(tf, pcd))
 
-        # update sample
-        sample['pcd'] = Pointcloud(points=np.concatenate(pcds, axis=0))
+        # update sample's data
+        sample['data'] = dict(pcd=Pointcloud(
+            points=np.concatenate(pcds, axis=0)))
 
     def load_anno(self, sample, info):
         anno = io.load(info['anno_path'])
 
-        boxes, types, num_points = [], [], []
+        boxes = np.empty((0, 7), dtype=np.float32)
+        types = np.empty((0,), dtype=np.int32)
+        num_points = np.empty((0,), dtype=np.int32)
+        box_list, type_list, num_points_list = [], [], []
         for object in anno['objects']:
             raw_type = object['type']
             if raw_type in self.type_raw_to_task:
-                boxes.append(object['box'])
-                types.append(self.type_raw_to_task[raw_type])
-                num_points.append(object['num_points'])
-        boxes = np.stack(boxes, axis=0)
-        types = np.array(types, dtype=np.int32)
-        num_points = np.array(num_points, dtype=np.int32)
+                box_list.append(object['box'])
+                type_list.append(self.type_raw_to_task[raw_type])
+                num_points_list.append(object['num_points'])
+        if len(box_list) > 0:
+            boxes = np.stack(box_list, axis=0)
+            types = np.array(type_list, dtype=np.int32)
+            num_points = np.array(num_points_list, dtype=np.int32)
 
-        # update sample
-        sample.update({
-            'anno': Annotation3d(boxes=boxes, types=types, num_points=num_points),
-            'type_name': self.type_id_to_name,
-        })
+        # update sample's anno and meta
+        sample['anno'] = Annotation3d(
+            boxes=boxes, types=types, num_points=num_points)
+        sample['meta']['type_name'] = self.type_id_to_name
 
-    def format(self, result, output_path):
-        raise NotImplementedError
+    def format(self, output, pred_path=None, gt_path=None):
+        r'''
+        format output to dataset specific format for submission and evaluation.
+        if output_path is None, a tmp file will be used
+        '''
+        return pred_path, gt_path
 
-    def evaluate(self, predict_path, gt_path):
-        raise NotImplementedError
+    def evaluate(self, pred_path, gt_path):
+        r'''
+        evaluate metrics
+        '''
+        return {'accuracy': 0.0}

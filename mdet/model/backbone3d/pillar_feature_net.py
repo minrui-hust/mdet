@@ -16,8 +16,9 @@ class PillarFeatureNet(BaseModule):
 
     def __init__(self,
                  pillar_feat=[('position', 3), ('attribute', 1)],
-                 voxel_size=(0.2, 0.2, 4),
                  point_range=(0, -40, -3, 70.4, 40, 1),
+                 voxel_size=(0.2, 0.2, 4),
+                 voxel_reso=(100, 100, 1),
                  pfn_channels=(64, )):
         super(PillarFeatureNet, self).__init__()
         assert len(pfn_channels) > 0
@@ -30,11 +31,10 @@ class PillarFeatureNet(BaseModule):
         self.pfn_layers = nn.ModuleList([PFNLayer(pfn_channels[i], pfn_channels[i+1], last_layer=(i == len(pfn_channels)-2))
                                          for i in range(len(pfn_channels)-1)])
 
-        self.voxel_size = voxel_size
+        self.voxel_reso = voxel_reso[:2]
+        self.voxel_size = voxel_size[:2]
         self.voxel_offset = (-point_range[0] + voxel_size[0]/2,
                              -point_range[1] + voxel_size[1]/2)
-        self.voxel_reso = (int(math.floor((point_range[3]-point_range[0])/voxel_size[0])),
-                           int(math.floor((point_range[4]-point_range[1])/voxel_size[1])))
 
     def forward_train(self, voxelization_result):
         """Forward function.

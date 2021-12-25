@@ -8,18 +8,18 @@ class Sample(dict):
 
     def to(self, device, **kwargs):
         r'''
-        Put all torch.tensor and np.ndarray elements onto device,
-        if element is np.ndarray, first cast it into torch.tensor
+        Put all torch.tensor elements onto device,
         '''
         def wrap(x):
-            if isinstance(x, np.ndarray):
-                return torch.from_numpy(x).to(device, **kwargs)
-            elif torch.is_tensor(x):
+            if torch.is_tensor(x):
                 return x.to(device, **kwargs)
             else:
                 return x
 
         return self.__apply_all(wrap)
+
+    def select(self, elements):
+        return Sample(**{key: self[key] for key in elements if key in self})
 
     def __apply_all(self, func):
         r"""
