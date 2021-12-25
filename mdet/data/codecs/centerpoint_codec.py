@@ -53,6 +53,7 @@ class CenterPointCodec(BaseCodec):
         # just pcd for now
         sample['input'] = dict(pcd=torch.from_numpy(
             sample['data']['pcd'].points))
+        sample.pop('data')
 
     def encode_anno(self, sample, info):
         boxes = sample['anno'].boxes
@@ -113,6 +114,7 @@ class CenterPointCodec(BaseCodec):
                             positive_heatmap_indices=torch.from_numpy(
                                 positive_heatmap_indices),
                             )
+        sample.pop('anno')
 
     def decode(self, output, batch):
         r'''

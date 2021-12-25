@@ -118,7 +118,7 @@ def main(args):
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
-        profiler=prof,
+        #  profiler=prof,
         overfit_batches=100,
     )
 
