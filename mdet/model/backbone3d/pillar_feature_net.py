@@ -47,19 +47,19 @@ class PillarFeatureNet(BaseModule):
         """
 
         # collate voxelization into tensors
-        voxels, coords, point_nums, voxel_nums = self.colloate(
-            voxelization_result)
+        voxels, coords, point_nums = self.colloate(voxelization_result)
 
         # construct pillar feature from raw points
         pillar_feature = self.construct_pillar(voxels, coords, point_nums)
 
         # pass through pfn layers
-        mask = construct_mask(point_nums, voxels.size(2), inverse=True)
+        mask = construct_mask(point_nums, voxels.size(-2), inverse=True)
         for pfn in self.pfn_layers:
             pillar_feature = pfn(pillar_feature, mask)
 
         # in shape [batch, W, H, channels]
-        feature_image = self.scatter(pillar_feature, coords, voxel_nums)
+        feature_image = self.scatter(
+            pillar_feature, coords, len(voxelization_result))
 
         return feature_image
 
@@ -69,26 +69,24 @@ class PillarFeatureNet(BaseModule):
         '''
 
         voxels, coords, point_nums, voxel_nums = [], [], [], []
-        for voxel, coord, point_num, voxel_num in voxelization_result:
-            voxels.append(voxel)
-            coords.append(coord)
-            point_nums.append(point_num)
-            voxel_nums.append(voxel_num)
+        for i, (voxel, coord, point_num, voxel_num) in enumerate(voxelization_result):
+            voxels.append(voxel[:voxel_num])
+            coords.append(F.pad(coord[:voxel_num], (1, 0), value=i))
+            point_nums.append(point_num[:voxel_num])
 
         # stack along batch dimension
-        voxels = torch.stack(voxels, dim=0)
-        coords = torch.stack(coords, dim=0)
-        point_nums = torch.stack(point_nums, dim=0)
-        voxel_nums = torch.stack(voxel_nums, dim=0)
+        voxels = torch.cat(voxels, dim=0)
+        coords = torch.cat(coords, dim=0)
+        point_nums = torch.cat(point_nums, dim=0)
 
-        return voxels, coords, point_nums, voxel_nums
+        return voxels, coords, point_nums
 
     def construct_pillar(self, voxels, coords, point_nums):
         r'''
         Construct pillar from raw points in a voxel, invalid points has value of zero
-        voxels: [batch_size, max_pillar_num, max_point_num, point_dimension]
-        coords: [batch_size, max_pillar_num, 3], in z,y,x order
-        point_nums: [batch_size, max_pillar_num]
+        voxels: [max_pillar_num, max_point_num, point_dimension]
+        coords: [max_pillar_num, 4], in sample_id,z,y,x order
+        point_nums: [max_pillar_num]
         '''
 
         position = voxels[..., :3]
@@ -101,7 +99,7 @@ class PillarFeatureNet(BaseModule):
                 feature_list.append(position)
             elif feat_name == 'mean_offset':  # offset to pillar mean
                 pillar_mean = position.sum(
-                    dim=1, keepdim=True) / (point_nums.type_as(voxels).unsqueeze(-1).unsqueeze(-1) + 1e-6)
+                    dim=-2, keepdim=True) / point_nums.type_as(voxels).unsqueeze(-1).unsqueeze(-1)
                 mean_offset = position - pillar_mean
                 feature_list.append(mean_offset)
             elif feat_name == 'center_offset':  # offset to voxel center
@@ -109,9 +107,9 @@ class PillarFeatureNet(BaseModule):
                                           dtype=voxels.dtype, device=voxels.device)
                 voxel_offset = torch.tensor([self.voxel_offset[0], self.voxel_offset[1]],
                                             dtype=voxels.dtype, device=voxels.device)
-                pillar_center = coords[..., [2, 1]].type_as(
+                pillar_center = coords[..., [-1, -2]].type_as(
                     voxels) * voxel_size + voxel_offset
-                center_offset = position[..., :2] - pillar_center.unsqueeze(2)
+                center_offset = position[..., :2] - pillar_center.unsqueeze(-2)
                 feature_list.append(center_offset)
             elif feat_name == 'distance':  # distance to origin
                 distance = torch.norm(position, 2, -1, keepdim=True)
@@ -120,24 +118,21 @@ class PillarFeatureNet(BaseModule):
                 raise NotImplementedError
         return torch.cat(feature_list, dim=-1)
 
-    def scatter(self, pillar_feature, coords, voxel_nums):
+    def scatter(self, pillar_feature, coords, batch_size):
         r'''
         pillar_feature: shape [B, max_pillar_num, feature_size] 
         coords: shape [B, max_pillar_num, 4]
         voxel_nums: shape [B]
         '''
-        batch_size, feature_size = voxel_nums.size(0), pillar_feature.size(2)
+        feature_size = pillar_feature.size(-1)
         w, h = self.voxel_reso
 
-        canvas = torch.zeros(batch_size, feature_size, w*h,
-                             dtype=pillar_feature.dtype, device=pillar_feature.device)
-        for i in range(batch_size):
-            coord = coords[i, :voxel_nums[i]]
-            index = (coord[:, 1] * w + coord[:, 2]).long()
-            feat = pillar_feature[i, :voxel_nums[i]]
-            canvas[i, :, index] = feat.t()
+        canvas = torch.zeros(batch_size*w*h, feature_size, dtype=pillar_feature.dtype, device=pillar_feature.device)
+        index = (coords[:, 0] * w*h + coords[:, 2]*w + coords[:,3]).long()
+        canvas[index] = pillar_feature
+        canvas = canvas.view(batch_size, h, w, feature_size).permute(0,3,1,2)
 
-        return canvas.view(batch_size, feature_size, h, w)
+        return canvas
 
 
 class PFNLayer(nn.Module):

@@ -10,7 +10,10 @@ import mdet.model
 import pytorch_lightning as pl
 import pytorch_lightning.loggers as loggers
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.profiler import PyTorchProfiler
 import mdet.utils.io as io
+import torch
+from torch.profiler.profiler import tensorboard_trace_handler
 
 
 r'''
@@ -71,7 +74,7 @@ def main(args):
         print(f'show_pred_args:\n{args.show_pred_args}')
 
     def step_hook(sample, module):
-        sample.to('cpu')
+        #  sample.to('cpu')
         if args.show_output:
             module.eval_codec.plot(sample, **args.show_output_args)
 
@@ -105,12 +108,18 @@ def main(args):
     # create lightning module
     pl_module = PlWrapper(config)
 
+    prof = PyTorchProfiler(
+        filename='prof'
+    )
+
     # setup trainner
     trainer = pl.Trainer(
         logger=False,
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
+        profiler=prof,
+        overfit_batches=100,
     )
 
     # do validation
