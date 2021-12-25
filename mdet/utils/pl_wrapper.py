@@ -96,6 +96,7 @@ class PlWrapper(pl.LightningModule):
             elif key in batch:
                 batch_interest[key] = batch[key]
             else:
+                print(key)
                 raise NotImplementedError
 
         # decollate to sample_list

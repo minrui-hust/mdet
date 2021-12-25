@@ -1,13 +1,16 @@
+import argparse
 import os
 import os.path as osp
-import argparse
-from mdet.utils.pl_wrapper import PlWrapper
-import mdet.utils.config_loader as ConfigLoader
+
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+import pytorch_lightning.loggers as loggers
+from pytorch_lightning.profiler import PyTorchProfiler
+
 import mdet.data
 import mdet.model
-import pytorch_lightning as pl
-import pytorch_lightning.loggers as loggers
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+import mdet.utils.config_loader as ConfigLoader
+from mdet.utils.pl_wrapper import PlWrapper
 
 r'''
 Train model
@@ -68,6 +71,10 @@ def main(args):
         args.workspace, 'checkpoint', config_name, experiment_version)
     callbacks.append(ModelCheckpoint(dirpath=checkpoint_folder))
 
+    prof = PyTorchProfiler(
+        filename='prof'
+    )
+
     # setup trainner
     trainer = pl.Trainer(
         num_sanity_val_steps=0,
@@ -77,6 +84,8 @@ def main(args):
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
+        overfit_batches=100,
+        profiler=prof,
     )
 
     # do fit
