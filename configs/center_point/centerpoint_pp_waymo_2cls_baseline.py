@@ -12,7 +12,7 @@ voxel_reso = [472, 472, 1]
 out_grid_size = [0.64, 0.64]
 out_grid_reso = [236, 236]
 
-max_epochs = 1 # 36
+max_epochs = 48
 batch_size = 2
 
 
@@ -184,6 +184,6 @@ runtime = dict(
             dict(type='CSVLogger',),
         ],
     ),
-    val=dict(output_folder=None),
+    val=dict(output_folder=None, evaluate=False),
     test=dict(),
 )

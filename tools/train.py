@@ -6,11 +6,15 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 import pytorch_lightning.loggers as loggers
 from pytorch_lightning.profiler import PyTorchProfiler
+import torch
 
 import mdet.data
 import mdet.model
 import mdet.utils.config_loader as ConfigLoader
 from mdet.utils.pl_wrapper import PlWrapper
+
+import mdet.utils.numpy_pickle
+
 
 r'''
 Train model
@@ -23,9 +27,13 @@ def parse_args():
     parser.add_argument(
         '--ckpt', help='the checkpoint file to resume from')
     parser.add_argument(
-        '--workspace', default='./workspace', help='the workspace folder output logs store')
+        '--work_dir', default='./log', help='the folder logs store')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
+    parser.add_argument('--overfit', type=int, default=0,
+                        help='overfit batch num, used for debug')
+    parser.add_argument('--profile', default=False, action='store_true',
+                        help='wether don profile, use together with overfit')
     return parser.parse_args()
 
 
@@ -55,7 +63,7 @@ def main(args):
         cfg = logger_cfg.copy()
         type = cfg.pop('type')
         logger_list.append(loggers.__dict__[type](
-            osp.join(args.workspace, 'log'), name=config_name, version=version, **cfg))
+            args.work_dir, name=config_name, version=version, **cfg))
         if version is None:
             version = logger_list[-1].version
 
@@ -68,11 +76,14 @@ def main(args):
     callbacks = []
     # make checkpoint path identical with log
     checkpoint_folder = osp.join(
-        args.workspace, 'checkpoint', config_name, experiment_version)
+        args.work_dir, config_name, experiment_version)
     callbacks.append(ModelCheckpoint(dirpath=checkpoint_folder))
 
+    # profiler
     prof = PyTorchProfiler(
-        filename='prof'
+        dirpath=checkpoint_folder,  # use same as checkpoint
+        filename='profile',
+        schedule=torch.profiler.schedule(wait=2, warmup=2, active=10, repeat=1),
     )
 
     # setup trainner
@@ -84,8 +95,8 @@ def main(args):
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
-        overfit_batches=100,
-        profiler=prof,
+        overfit_batches=args.overfit,
+        profiler=prof if args.profile else None,
     )
 
     # do fit

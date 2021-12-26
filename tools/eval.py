@@ -1,19 +1,22 @@
-import os
-from functools import partial
-import yaml
-import os.path as osp
 import argparse
-from mdet.utils.pl_wrapper import PlWrapper
-import mdet.utils.config_loader as ConfigLoader
-import mdet.data
-import mdet.model
+from functools import partial
+import os
+import os.path as osp
+
 import pytorch_lightning as pl
-import pytorch_lightning.loggers as loggers
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+import pytorch_lightning.loggers as loggers
 from pytorch_lightning.profiler import PyTorchProfiler
-import mdet.utils.io as io
 import torch
 from torch.profiler.profiler import tensorboard_trace_handler
+import yaml
+
+import mdet.data
+import mdet.model
+import mdet.utils.config_loader as ConfigLoader
+import mdet.utils.io as io
+import mdet.utils.numpy_pickle
+from mdet.utils.pl_wrapper import PlWrapper
 
 
 r'''
@@ -119,7 +122,7 @@ def main(args):
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
         #  profiler=prof,
-        overfit_batches=100,
+        #  overfit_batches=100,
     )
 
     # do validation

@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from mdet.model import BaseModule
 from mdet.utils.factory import FI
 from mdet.model.utils import construct_mask
+from torch.profiler import record_function
 
 import math
 
@@ -28,7 +29,7 @@ class PillarFeatureNet(BaseModule):
         assert in_channels > 0
 
         pfn_channels = [in_channels] + list(pfn_channels)
-        self.pfn_layers = nn.ModuleList([PFNLayer(pfn_channels[i], pfn_channels[i+1], last_layer=(i == len(pfn_channels)-2))
+        self.pfn_layers = nn.ModuleList([PFNLayerBN(pfn_channels[i], pfn_channels[i+1], last_layer=(i == len(pfn_channels)-2))
                                          for i in range(len(pfn_channels)-1)])
 
         self.voxel_reso = voxel_reso[:2]
@@ -47,19 +48,23 @@ class PillarFeatureNet(BaseModule):
         """
 
         # collate voxelization into tensors
-        voxels, coords, point_nums = self.colloate(voxelization_result)
+        with record_function("collate_voxel"):
+            voxels, coords, point_nums = self.colloate(voxelization_result)
 
         # construct pillar feature from raw points
-        pillar_feature = self.construct_pillar(voxels, coords, point_nums)
+        with record_function("construct_pillar"):
+            pillar_feature = self.construct_pillar(voxels, coords, point_nums)
 
         # pass through pfn layers
-        mask = construct_mask(point_nums, voxels.size(-2), inverse=True)
-        for pfn in self.pfn_layers:
-            pillar_feature = pfn(pillar_feature, mask)
+        with record_function("pillar_pfn"):
+            mask = construct_mask(point_nums, voxels.size(-2), inverse=True)
+            for pfn in self.pfn_layers:
+                pillar_feature = pfn(pillar_feature, mask)
 
         # in shape [batch, W, H, channels]
-        feature_image = self.scatter(
-            pillar_feature, coords, len(voxelization_result))
+        with record_function("pillar_scatter"):
+            feature_image = self.scatter(
+                pillar_feature, coords, len(voxelization_result))
 
         return feature_image
 
@@ -116,7 +121,7 @@ class PillarFeatureNet(BaseModule):
                 feature_list.append(distance)
             else:
                 raise NotImplementedError
-        return torch.cat(feature_list, dim=-1)
+        return torch.cat(feature_list, dim=-1).transpose(-1, -2) # shape N x F x max_points
 
     def scatter(self, pillar_feature, coords, batch_size):
         r'''
@@ -127,12 +132,16 @@ class PillarFeatureNet(BaseModule):
         feature_size = pillar_feature.size(-1)
         w, h = self.voxel_reso
 
-        canvas = torch.zeros(batch_size*w*h, feature_size, dtype=pillar_feature.dtype, device=pillar_feature.device)
-        index = (coords[:, 0] * w*h + coords[:, 2]*w + coords[:,3]).long()
-        canvas[index] = pillar_feature
-        canvas = canvas.view(batch_size, h, w, feature_size).permute(0,3,1,2)
+        canvas = torch.zeros(batch_size, feature_size, w*h,
+                             dtype=pillar_feature.dtype, device=pillar_feature.device)
 
-        return canvas
+        for i in range(batch_size):
+            mask = coords[:,0]==i
+            coord = coords[mask]
+            index = (coord[:, 2]*w + coord[:, 3]).long()
+            canvas[i, :, index] = pillar_feature[mask].t()
+
+        return canvas.view(batch_size, feature_size, h, w)
 
 
 class PFNLayer(nn.Module):
@@ -165,3 +174,34 @@ class PFNLayer(nn.Module):
             return x_max.squeeze(-2)
         else:
             return torch.cat([x, x_max.expand_as(x)], dim=-1)
+
+class PFNLayerBN(nn.Module):
+    def __init__(self, in_channels, out_channels, last_layer=False):
+        r'''
+        '''
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.hidden_channels = out_channels
+        self.last_pfn = last_layer
+        if not self.last_pfn:
+            self.hidden_channels = self.hidden_channels // 2
+
+        self.linear = nn.Conv1d(self.in_channels, self.hidden_channels, 1, bias=False)
+        self.norm = nn.BatchNorm1d(self.hidden_channels)
+
+    def forward(self, x, mask=None):
+        x = self.linear(x)
+        x = self.norm(x)
+        x = F.relu(x, inplace=True)
+
+        if mask is not None: # mask is N x max_points, unsqueeze to N x 1 x max_points
+            x = x.masked_fill(mask.unsqueeze(-2), float('-inf'))
+
+        # x.shape N x C x max_points
+        x_max = torch.max(x, dim=-1, keepdim=True)[0]
+
+        if self.last_pfn:
+            return x_max.squeeze(-1)
+        else:
+            return torch.cat([x, x_max.expand_as(x)], dim=-2)
