@@ -47,6 +47,10 @@ def parse_args():
                         Loader=yaml.FullLoader), default='{}', help='show model prediction')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
+    parser.add_argument('--overfit', type=int, default=0,
+                        help='overfit batch num, used for debug')
+    parser.add_argument('--profile', default=False, action='store_true',
+                        help='wether don profile, use together with overfit')
     return parser.parse_args()
 
 
@@ -115,14 +119,29 @@ def main(args):
         filename='prof'
     )
 
+    # profiler
+    checkpoint_folder = './'
+    if args.ckpt is not None:
+        assert(osp.exists(args.ckpt) and osp.isfile(args.ckpt))
+        checkpoint_folder = osp.dirname(args.ckpt)
+
+    profiler = None
+    if args.profile:
+        profiler = PyTorchProfiler(
+            dirpath=checkpoint_folder,  # use same as checkpoint
+            filename='profile',
+            schedule=torch.profiler.schedule(
+                wait=2, warmup=2, active=6, repeat=1),
+        )
+
     # setup trainner
     trainer = pl.Trainer(
         logger=False,
         gpus=args.gpu,
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
-        #  profiler=prof,
-        #  overfit_batches=100,
+        overfit_batches=args.overfit,
+        profiler=profiler
     )
 
     # do validation

@@ -11,9 +11,8 @@ import torch
 import mdet.data
 import mdet.model
 import mdet.utils.config_loader as ConfigLoader
-from mdet.utils.pl_wrapper import PlWrapper
-
 import mdet.utils.numpy_pickle
+from mdet.utils.pl_wrapper import PlWrapper
 
 
 r'''
@@ -80,11 +79,14 @@ def main(args):
     callbacks.append(ModelCheckpoint(dirpath=checkpoint_folder))
 
     # profiler
-    prof = PyTorchProfiler(
-        dirpath=checkpoint_folder,  # use same as checkpoint
-        filename='profile',
-        schedule=torch.profiler.schedule(wait=2, warmup=2, active=10, repeat=1),
-    )
+    profiler = None
+    if args.profile:
+        profiler = PyTorchProfiler(
+            dirpath=checkpoint_folder,  # use same as checkpoint
+            filename='profile',
+            schedule=torch.profiler.schedule(
+                wait=2, warmup=2, active=6, repeat=1),
+        )
 
     # setup trainner
     trainer = pl.Trainer(
@@ -96,7 +98,7 @@ def main(args):
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
         overfit_batches=args.overfit,
-        profiler=prof if args.profile else None,
+        profiler=profiler,
     )
 
     # do fit
