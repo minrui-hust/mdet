@@ -12,9 +12,8 @@ voxel_reso = [472, 472, 1]
 out_grid_size = [0.64, 0.64]
 out_grid_reso = [236, 236]
 
-max_epochs = 48
 batch_size = 2
-
+max_epochs = 48
 
 # model config
 model_train = dict(
@@ -159,26 +158,24 @@ data = dict(
 )
 
 fit = dict(
+    max_epochs=max_epochs,
     optimizer=dict(
         type='Adam',
-        lr=3e-4/2,
+        lr=3e-4 / 2,
         betas=(0.9, 0.99),
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=3e-4/2,
+        max_lr=3e-4 / 2,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
         pct_start=0.4,
-        epochs=max_epochs,
-        steps_per_epoch=1800,
     ),
 )
 
 runtime = dict(
     train=dict(
-        max_epochs=max_epochs,
         logger=[
             dict(type='TensorBoardLogger',),
             dict(type='CSVLogger',),

@@ -236,6 +236,12 @@ class PlWrapper(pl.LightningModule):
         # lr scheduler
         sched_cfg = self.config['fit']['scheduler'].copy()
         sched_type_name = sched_cfg.pop('type')
+
+        # hack for specific lr_scheduler
+        if sched_type_name == 'OneCycleLR':
+            sched_cfg['total_steps'] = len(
+                self.train_dataloader()) * self.config['fit']['max_epochs']
+
         scheduler = optim.lr_scheduler.__dict__[
             sched_type_name](optimizer, **sched_cfg)
 

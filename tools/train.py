@@ -45,7 +45,7 @@ def main(args):
     config = ConfigLoader.load(args.config)
     pl_module = PlWrapper(config)
 
-    max_epochs = config['runtime']['train']['max_epochs']
+    max_epochs = config['fit']['max_epochs']
     print(f'Total epochs: {max_epochs}')
 
     # recovery version from checkpoint path

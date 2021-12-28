@@ -5,7 +5,7 @@ import torch.nn as nn
 class BaseCodec(object):
     r'''
     What codec does:
-        1. encode standard sample into task specific format, 
+        1. encode standard sample into task specific format,
         2. decode task specific output into standard fromat(that is same as annotation)
         3. calc loss given output and gt
         5. define the collator to collate the encoded sample
