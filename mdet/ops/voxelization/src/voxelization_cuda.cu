@@ -34,8 +34,9 @@ template <typename T_int> inline T_int CeilDiv(T_int a, T_int b) {
 
 // list all the point in a voxel
 struct __align__(4) ListNode {
-  int next;  // next point id
-  int3 cord; // voxel coord of this point
+  int next;   // next point id
+  int3 cord;  // voxel coord of this point
+  float dist; // min voxel distance to origin
 };
 
 __global__ void ScatterPointToVoxel( // clang-format off
@@ -60,24 +61,30 @@ __global__ void ScatterPointToVoxel( // clang-format off
     ListNode *cur_node = point_nodes + i;
 
     // clang-format off
-        // calc which voxel this point scatter into
-        auto& cord = cur_node->cord;
-        cord.x = floor((cur_point[0] - range_min_x) / voxel_size_x);
-        cord.y = floor((cur_point[1] - range_min_y) / voxel_size_y);
-        cord.z = floor((cur_point[2] - range_min_z) / voxel_size_z);
+    // calc which voxel this point scatter into
+    auto& cord = cur_node->cord;
+    cord.x = floor((cur_point[0] - range_min_x) / voxel_size_x);
+    cord.y = floor((cur_point[1] - range_min_y) / voxel_size_y);
+    cord.z = floor((cur_point[2] - range_min_z) / voxel_size_z);
     // clang-format on
 
     // clang-format off
-        // drop point out of range
-        if (cord.x < 0 || cord.x >= grid_size_x ||
-            cord.y < 0 || cord.y >= grid_size_y || 
-            cord.z < 0 || cord.z >= grid_size_z ) continue;
+    // drop point out of range
+    if (cord.x < 0 || cord.x >= grid_size_x ||
+        cord.y < 0 || cord.y >= grid_size_y || 
+        cord.z < 0 || cord.z >= grid_size_z ) continue;
     // clang-format on
 
     // clang-format off
-        int hash_id = grid_size_x * grid_size_y * cord.z+ 
-                                    grid_size_x * cord.y+ 
-                                                  cord.x;
+    cur_node->dist = cur_point[0] * cur_point[0] + 
+                     cur_point[1] * cur_point[1] +
+                     cur_point[2] * cur_point[2];
+    // clang-format on
+
+    // clang-format off
+    int hash_id = grid_size_x * grid_size_y * cord.z+ 
+                                grid_size_x * cord.y+ 
+                                              cord.x;
     // clang-format on
 
     // data in voxel_head_id_addr will be accessed by different thread,
@@ -113,6 +120,10 @@ __global__ void GatherVoxelFromPoint( // clang-format off
                                       int * __restrict__ valid_voxel_num, // valid voxel num addr
                                       int max_voxels, // max output voxels
                                       int max_points, // max num of points in a voxel
+                                      reduce_t reduce_type,
+
+                                      // tmp
+                                      float* voxel_dists,
 
                                       // output
                                       float *voxels,
@@ -123,6 +134,7 @@ __global__ void GatherVoxelFromPoint( // clang-format off
     const auto &voxel_id = i;
     float *cur_voxel = voxels + voxel_id * max_points * point_dim;
     int *cur_voxel_cord = voxel_cords + voxel_id * 3;
+    float &cur_voxel_dist = voxel_dists[voxel_id];
 
     // the list head
     int cur_point_global_id = voxel_list_head_id[output_voxel_hash_id[i]];
@@ -134,11 +146,30 @@ __global__ void GatherVoxelFromPoint( // clang-format off
 
     // loop utils list end or max_points reached
     int voxel_point_id = 0;
-    while (cur_point_global_id >= 0 && voxel_point_id < max_points) {
-      // copy point's coors into voxel
-      for (auto j = 0; j < point_dim; ++j) {
-        cur_voxel[voxel_point_id * point_dim + j] =
-            points[cur_point_global_id * point_dim + j];
+    while (cur_point_global_id >= 0 &&
+           (voxel_point_id < max_points || max_points == 0)) {
+      if (reduce_type == reduce_t::MEAN) {
+        for (auto j = 0; j < point_dim; ++j) {
+          cur_voxel[j] +=
+              (points[cur_point_global_id * point_dim + j] - cur_voxel[j]) /
+              (voxel_point_id + 1);
+        }
+      } else if (reduce_type == reduce_t::NEAREST) {
+        float point_dist = point_nodes[cur_point_global_id].dist;
+        float voxel_dist = voxel_point_id == 0
+                               ? std::numeric_limits<float>::max()
+                               : cur_voxel_dist;
+        if (point_dist < voxel_dist) {
+          for (auto j = 0; j < point_dim; ++j) {
+            cur_voxel[j] = points[cur_point_global_id * point_dim + j];
+          }
+          cur_voxel_dist = point_dist;
+        }
+      } else { // NONE, FIRST
+        for (auto j = 0; j < point_dim; ++j) {
+          cur_voxel[voxel_point_id * point_dim + j] =
+              points[cur_point_global_id * point_dim + j];
+        }
       }
 
       // move to next point
@@ -165,11 +196,13 @@ void VoxelizationAsync(
                        int point_dim,  // point dimension,
                        std::vector<float> point_range, // point cloud range
                        std::vector<float> voxel_size, // voxel size
-                       std::vector<int> grid_size, // grid size
+                       std::vector<int32_t> voxel_reso, // grid size
                        int max_voxels, // max output voxels
                        int max_points, // max points in an voxel
+                       reduce_t reduce_type, // reduce type
 
                        // tmp
+                       float* voxel_dists,
                        int* voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
                        ListNode* point_nodes, // list node of each point, size: point_num
                        int* output_voxel_hash_id, // out voxel hash id, size: max_voxels
@@ -193,7 +226,7 @@ void VoxelizationAsync(
         points, point_num, point_dim, 
         point_range[0], point_range[1], point_range[2], 
         voxel_size[0], voxel_size[1], voxel_size[2], 
-        grid_size[0], grid_size[1], grid_size[2], 
+        voxel_reso[0], voxel_reso[1], voxel_reso[2], 
         max_voxels,
         voxel_list_head_id,
         point_nodes,
@@ -213,6 +246,8 @@ void VoxelizationAsync(
                                         valid_voxel_num, // valid voxel num addr
                                         max_voxels, // max output voxels
                                         max_points, // max num of points in a voxel
+                                        reduce_type,
+                                        voxel_dists,
                                         voxels, // output voxel data
                                         voxel_cords, // output voxel cords
                                         voxel_points
@@ -228,6 +263,7 @@ namespace voxelization {
 void voxelize_gpu(const at::Tensor &points,
                  const std::vector<float> &point_range,
                  const std::vector<float> &voxel_size,
+                 const std::vector<int32_t> &voxel_reso,
                  const int max_points, 
                  const int max_voxels,
                  const reduce_t reduce_type,
@@ -239,13 +275,6 @@ void voxelize_gpu(const at::Tensor &points,
   CHECK_INPUT(points);
   at::cuda::CUDAGuard device_guard(points.device());
 
-  // prepare temporary
-  std::vector<int> voxel_reso(NDim);
-  for (auto i = 0u; i < NDim; ++i) {
-    voxel_reso[i] =
-        round((point_range[NDim + i] - point_range[i]) / voxel_size[i]);
-  }
-
   at::Tensor voxel_list_head_id = -at::ones(
       {voxel_reso[0], voxel_reso[1], voxel_reso[2]}, coords.options());
 
@@ -254,6 +283,11 @@ void voxelize_gpu(const at::Tensor &points,
                 coords.options().dtype(at::ScalarType::Byte));
 
   at::Tensor voxel_hash_id = at::empty({max_voxels}, coords.options());
+
+  float *voxel_dists = nullptr;
+  if (reduce_type == reduce_t::NEAREST) {
+    cudaMalloc(&voxel_dists, sizeof(float) * max_voxels);
+  }
 
   // clang-format off
   VoxelizationAsync(points.contiguous().data_ptr<float>(), 
@@ -264,6 +298,8 @@ void voxelize_gpu(const at::Tensor &points,
                     voxel_reso,
                     max_voxels,
                     max_points,
+                    reduce_type,
+                    voxel_dists,
                     voxel_list_head_id.contiguous().data_ptr<int>(),
                     (ListNode*)points_node.contiguous().data_ptr<uint8_t>(),
                     voxel_hash_id.contiguous().data_ptr<int>(),

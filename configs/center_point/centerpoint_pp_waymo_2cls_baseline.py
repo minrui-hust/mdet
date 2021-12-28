@@ -20,8 +20,9 @@ model_train = dict(
     type='Det3dOneStage',
     voxelization=dict(
         type='PillarVoxelization',
-        voxel_size=voxel_size,
         point_range=point_range,
+        voxel_size=voxel_size,
+        voxel_reso=voxel_reso,
         max_points=32,
         max_voxels=32000,
     ),

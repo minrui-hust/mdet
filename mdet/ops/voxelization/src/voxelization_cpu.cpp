@@ -11,7 +11,7 @@ template <typename T, typename T_int>
 void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
                      const std::vector<float>& point_range,
                      const std::vector<float>& voxel_size,
-                     const std::vector<int>& voxel_reso,
+                     const std::vector<int32_t>& voxel_reso,
                      const int max_points,
                      const int max_voxels,
                      const reduce_t reduce_type,
@@ -21,6 +21,14 @@ void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
                      torch::TensorAccessor<T_int, 1> point_num,
                      int* voxel_num
                      ) { // clang-format on
+  // point feature size
+  auto FDim = points.size(-1);
+
+  // used for reduce_t::NEAREST
+  std::vector<float> voxel_dists;
+  if (reduce_type == reduce_t::NEAREST) {
+    voxel_dists.resize(max_voxels, std::numeric_limits<float>::max());
+  }
 
   // pos -> cord ->idx
   std::array<int, NDim> voxel_coord;
@@ -54,15 +62,41 @@ void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
       }
     }
 
+    // add point into voxel
     auto &voxel_point_num = point_num[voxel_idx];
-    if (voxel_point_num >= max_points) { // max point num of this voxel reached
+    if (voxel_point_num >= max_points &&
+        max_points != 0) { // max point num of this voxel reached
       continue;
     } else { // copy point into voxel and increase the point_num of this voxel
-      for (auto j = 0u; j < points.size(1); ++j) {
-        voxels[voxel_idx][voxel_point_num][j] = points[i][j];
+      if (reduce_type == reduce_t::MEAN) {
+        for (auto j = 0u; j < FDim; ++j) {
+          voxels[voxel_idx][0][j] +=
+              (points[i][j] - voxels[voxel_idx][0][j]) / (voxel_point_num + 1);
+        }
+      } else if (reduce_type == reduce_t::NEAREST) {
+        // calc point to origin distance
+        float point_dist = 0;
+        for (auto j = 0u; j < NDim; ++j) {
+          point_dist += points[i][j] * points[i][j];
+        }
+
+        // get voxel to origin distance
+        auto &voxel_dist = voxel_dists[voxel_idx];
+
+        // update voxel to origin distance accordingly
+        if (point_dist < voxel_dist) {
+          for (auto j = 0u; j < FDim; ++j) {
+            voxels[voxel_idx][0][j] = points[i][j];
+          }
+          voxel_dist = point_dist;
+        }
+      } else { // NONE, FIRST
+        for (auto j = 0u; j < FDim; ++j) {
+          voxels[voxel_idx][voxel_point_num][j] = points[i][j];
+        }
       }
-      ++voxel_point_num;
     }
+    ++voxel_point_num;
   }
 }
 
@@ -74,6 +108,7 @@ namespace voxelization {
 void voxelize_cpu(const at::Tensor &points,
                   const std::vector<float> &point_range,
                   const std::vector<float> &voxel_size,
+                  const std::vector<int32_t> &voxel_reso,
                   const int max_points, 
                   const int max_voxels,
                   const reduce_t reduce_type,
@@ -85,13 +120,7 @@ void voxelize_cpu(const at::Tensor &points,
   // check device
   AT_ASSERTM(points.device().is_cpu(), "points must be a CPU tensor");
 
-  std::vector<int> voxel_reso(NDim);
-  for (auto i = 0u; i < NDim; ++i) {
-    voxel_reso[i] =
-        round((point_range[NDim + i] - point_range[i]) / voxel_size[i]);
-  }
-
-  // indexed by z,y,x
+  // indexed by z,y,x, initialize to -1
   at::Tensor voxel_coord_to_idx = -at::ones(
       {voxel_reso[2], voxel_reso[1], voxel_reso[0]}, coords.options());
 
