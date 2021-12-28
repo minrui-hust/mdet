@@ -17,4 +17,11 @@ class PillarVoxelization(BaseModule):
 
     @torch.no_grad()
     def forward_train(self, points):
-        return Voxelize(points, self.point_range, self.voxel_size, self.voxel_reso, self.max_points, self.max_voxels)
+        return Voxelize(
+            points,
+            self.point_range,
+            self.voxel_size,
+            self.voxel_reso,
+            self.max_points,
+            self.max_voxels,
+        )
