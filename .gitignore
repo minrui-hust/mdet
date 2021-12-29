@@ -7,6 +7,7 @@ install/
 devel/
 log/
 workspace/
+profile/
 package/
 .catkin_workspace
 *.pyc

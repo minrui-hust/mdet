@@ -132,7 +132,8 @@ __global__ void GatherVoxelFromPoint( // clang-format off
                                     ) { // clang-format on
   CUDA_1D_KERNEL_LOOP(i, min(*valid_voxel_num, max_voxels)) {
     const auto &voxel_id = i;
-    float *cur_voxel = voxels + voxel_id * max_points * point_dim;
+    int voxel_point_num = reduce_type == reduce_t::NONE ? max_points : 1;
+    float *cur_voxel = voxels + voxel_id * voxel_point_num * point_dim;
     int *cur_voxel_cord = voxel_cords + voxel_id * 3;
     float &cur_voxel_dist = voxel_dists[voxel_id];
 
@@ -275,8 +276,10 @@ void voxelize_gpu(const at::Tensor &points,
   CHECK_INPUT(points);
   at::cuda::CUDAGuard device_guard(points.device());
 
-  at::Tensor voxel_list_head_id = -at::ones(
-      {voxel_reso[0], voxel_reso[1], voxel_reso[2]}, coords.options());
+  // TODO: this new_full is the bottole neck of voxlization when voxel num is
+  // large, considering use thrust lib's hash map
+  at::Tensor voxel_list_head_id =
+      coords.new_full({voxel_reso[0], voxel_reso[1], voxel_reso[2]}, -1);
 
   at::Tensor points_node =
       at::empty({points.size(0) * (int)sizeof(ListNode)},

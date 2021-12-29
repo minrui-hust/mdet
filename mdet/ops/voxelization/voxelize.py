@@ -67,6 +67,20 @@ class _Voxelize(Function):
         if reduce_type == 'first':
             max_points = 1
 
+        #  debug
+        #  print(f'points: {points.shape}')
+        #  print(f'range: {point_range}')
+        #  print(f'voxel_size: {voxel_size}')
+        #  print(f'voxel_reso: {voxel_reso}')
+        #  print(f'max_points: {max_points}')
+        #  print(f'max_voxels: {max_voxels}')
+        #  print(f'reduce_type: {reduce_type}')
+        #
+        #  print(f'voxels: {voxels.shape}')
+        #  print(f'coords: {coords.shape}')
+        #  print(f'point_num: {point_num.shape}')
+        #  print(f'voxel_num: {voxel_num.shape}')
+
         OpVoxelization(points, point_range, voxel_size, voxel_reso, max_points, max_voxels, _Voxelize.get_reduce_type(reduce_type),
                        voxels, coords, point_num, voxel_num)
 

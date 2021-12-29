@@ -41,15 +41,22 @@ class PillarFeatureNet(BaseModule):
         """Forward function.
 
         Args:
-            voxelization_result (list of tuple): result from voxelization
+            voxelization_result: result from voxelization, which is a dict contain
+                {
+                 'voxels': NxPxF
+                 'coords': Nx4, (sample_id, z, y, x)
+                 'point_nums': N
+                 'shape': (reso_z, reso_y, reso_x)
+                 'batch_size: number of samples'
+                }
 
         Returns:
             torch.Tensor: Features of dense 2d feature image
         """
-
-        # collate voxelization into tensors
-        with record_function("collate_voxel"):
-            voxels, coords, point_nums = self.colloate(voxelization_result)
+        voxels = voxelization_result['voxels']
+        coords = voxelization_result['coords']
+        point_nums = voxelization_result['point_nums']
+        batch_size = voxelization_result['batch_size']
 
         # construct pillar feature from raw points
         with record_function("construct_pillar"):
@@ -63,8 +70,7 @@ class PillarFeatureNet(BaseModule):
 
         # in shape [batch, W, H, channels]
         with record_function("pillar_scatter"):
-            feature_image = self.scatter(
-                pillar_feature, coords, len(voxelization_result))
+            feature_image = self.scatter(pillar_feature, coords, batch_size)
 
         return feature_image
 
@@ -121,7 +127,8 @@ class PillarFeatureNet(BaseModule):
                 feature_list.append(distance)
             else:
                 raise NotImplementedError
-        return torch.cat(feature_list, dim=-1).transpose(-1, -2) # shape N x F x max_points
+        # shape N x F x max_points
+        return torch.cat(feature_list, dim=-1).transpose(-1, -2)
 
     def scatter(self, pillar_feature, coords, batch_size):
         r'''
@@ -136,7 +143,7 @@ class PillarFeatureNet(BaseModule):
                              dtype=pillar_feature.dtype, device=pillar_feature.device)
 
         for i in range(batch_size):
-            mask = coords[:,0]==i
+            mask = coords[:, 0] == i
             coord = coords[mask]
             index = (coord[:, 2]*w + coord[:, 3]).long()
             canvas[i, :, index] = pillar_feature[mask].t()
@@ -175,6 +182,7 @@ class PFNLayer(nn.Module):
         else:
             return torch.cat([x, x_max.expand_as(x)], dim=-1)
 
+
 class PFNLayerBN(nn.Module):
     def __init__(self, in_channels, out_channels, last_layer=False):
         r'''
@@ -187,7 +195,8 @@ class PFNLayerBN(nn.Module):
         if not self.last_pfn:
             self.hidden_channels = self.hidden_channels // 2
 
-        self.linear = nn.Conv1d(self.in_channels, self.hidden_channels, 1, bias=False)
+        self.linear = nn.Conv1d(
+            self.in_channels, self.hidden_channels, 1, bias=False)
         self.norm = nn.BatchNorm1d(self.hidden_channels)
 
     def forward(self, x, mask=None):
@@ -195,7 +204,7 @@ class PFNLayerBN(nn.Module):
         x = self.norm(x)
         x = F.relu(x, inplace=True)
 
-        if mask is not None: # mask is N x max_points, unsqueeze to N x 1 x max_points
+        if mask is not None:  # mask is N x max_points, unsqueeze to N x 1 x max_points
             x = x.masked_fill(mask.unsqueeze(-2), float('-inf'))
 
         # x.shape N x C x max_points
