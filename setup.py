@@ -126,7 +126,6 @@ if __name__ == '__main__':
             make_cuda_ext(
                 name='voxelization',
                 module='mdet.ops.voxelization',
-                cuda_extra_args=['-g', '-G'],
                 sources=[
                     'src/voxelization.cpp',
                     'src/voxelization_cpu.cpp',
