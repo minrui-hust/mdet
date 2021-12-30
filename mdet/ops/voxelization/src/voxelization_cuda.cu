@@ -26,8 +26,6 @@
 
 namespace {
 
-constexpr size_t NDim = 3;
-
 template <typename T_int> inline T_int CeilDiv(T_int a, T_int b) {
   return (a + b - 1) / b;
 }
@@ -39,97 +37,120 @@ struct __align__(4) ListNode {
   float dist; // min voxel distance to origin
 };
 
-__global__ void ScatterPointToVoxel( // clang-format off
-                                     // input
-                                     const float* __restrict__ points,  // input points data, point_num*point_dim
-                                     int point_num,  // point number,
-                                     int point_dim,  // point dimension,
-                                     float range_min_x, float range_min_y, float range_min_z, // range
-                                     float voxel_size_x, float voxel_size_y, float voxel_size_z, // voxel size
-                                     int grid_size_x, int grid_size_y, int grid_size_z, // grid size
-                                     int max_voxels, // max output voxels
+__global__ void ScatterPointToPillar( // clang-format off
+  // input
+  const float* __restrict__ points, int point_num,  int point_dim,  // points,
+  float range_min_x, float range_min_y, float range_min_z, // range
+  float voxel_size_x, float voxel_size_y, float voxel_size_z, // voxel size
+  int voxel_reso_x, int voxel_reso_y, int voxel_reso_z, // voxel resolution
+  int max_pillars, // max pillar number
+  bool record_dist, // whether record squared dist
 
-                                     // output
-                                     int *voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
-                                     ListNode *point_nodes, // list node of each point, size: point_num
-                                     int *output_voxel_hash_id, // out voxel hash id, size: max_voxels
-                                     int *valid_voxel_num // output valid voxel number, 1
-                                    ){ // clang-format on
+  // output
+  ListNode *point_nodes, // companion node of each point, same number as points
+  int *map_key_to_list, // key to node list
+  int *map_pillar_to_key, // pillar id to key of map_point_to_list
+  int *valid_pillar_num // valid pillar number, init to 0
+){ // clang-format on
   CUDA_1D_KERNEL_LOOP(i, point_num) {
-    // get current point and cooresponding list node
-    const float *cur_point = points + i * point_dim;
-    ListNode *cur_node = point_nodes + i;
+    const auto &point_id = i;
+    const float *cur_point = points + point_id * point_dim;
+    ListNode *cur_node = point_nodes + point_id;
 
-    // clang-format off
-    // calc which voxel this point scatter into
-    auto& cord = cur_node->cord;
+    // calc which pillar this point scatter to
+    auto &cord = cur_node->cord;
     cord.x = floor((cur_point[0] - range_min_x) / voxel_size_x);
     cord.y = floor((cur_point[1] - range_min_y) / voxel_size_y);
     cord.z = floor((cur_point[2] - range_min_z) / voxel_size_z);
-    // clang-format on
 
     // clang-format off
-    // drop point out of range
-    if (cord.x < 0 || cord.x >= grid_size_x ||
-        cord.y < 0 || cord.y >= grid_size_y || 
-        cord.z < 0 || cord.z >= grid_size_z ) continue;
+    if (cord.x < 0 || cord.x >= voxel_reso_x ||
+        cord.y < 0 || cord.y >= voxel_reso_y ||
+        cord.z < 0 || cord.z >= voxel_reso_z ) continue;
     // clang-format on
 
-    // clang-format off
-    cur_node->dist = cur_point[0] * cur_point[0] + 
-                     cur_point[1] * cur_point[1] +
-                     cur_point[2] * cur_point[2];
-    // clang-format on
+    // store dist if needed
+    if (record_dist) {
+      cur_node->dist = cur_point[0] * cur_point[0] +
+                       cur_point[1] * cur_point[1] +
+                       cur_point[2] * cur_point[2];
+    }
 
-    // clang-format off
-    int hash_id = grid_size_x * grid_size_y * cord.z+ 
-                                grid_size_x * cord.y+ 
-                                              cord.x;
-    // clang-format on
+    int key = voxel_reso_x * cord.y + cord.x;
 
-    // data in voxel_head_id_addr will be accessed by different thread,
-    // protection required
-    int *voxel_head_id_addr = voxel_list_head_id + hash_id;
+    cur_node->next = atomicExch(map_key_to_list + key, point_id);
 
-    // atomic set the value in voxel_head_id_addr to be current point index
-    // which is 'i'
-    int pre_head_id = atomicExch(voxel_head_id_addr, i);
-
-    // point to previous point
-    cur_node->next = pre_head_id;
-
-    // check if we should make a new voxel
-    // NOTE: valid_voxel_num may be larger than max_voxels
-    if (-1 == pre_head_id) {
-      int pre_valid_voxel_num = atomicAdd(valid_voxel_num, 1);
-      if (pre_valid_voxel_num < max_voxels) {
-        output_voxel_hash_id[pre_valid_voxel_num] = hash_id;
+    // should make a new node
+    if (cur_node->next == -1) {
+      int pillar_id = atomicAdd(valid_pillar_num, 1);
+      if (pillar_id < max_pillars) {
+        map_pillar_to_key[pillar_id] = key;
       }
     }
   }
 }
 
+__global__ void ScatterPillarPointToVoxel( // clang-format off
+  // input
+  const float* __restrict__ points, int point_num, int point_dim,  // points,
+  ListNode * __restrict__ point_nodes, // node for each point, store tmp info of the point
+  const int * __restrict__ map_key_to_pillar_list,
+  const int * __restrict__ map_pillar_to_key,
+  const int* __restrict__ pillar_num,
+  float range_min_z,
+  float voxel_size_z,
+  int voxel_reso_z,
+  int max_voxels,
+
+  // output
+  int *map_key_to_voxel_list, // point key to voxel id, init to -1, size: pillar_num*voxel_reso_z
+  int *map_voxel_to_key, // voxel to voxel's first point, init to -1, size: max_voxels
+  int *valid_voxel_num // output valid voxel number, init to 0
+){ // clang-format on
+  CUDA_1D_KERNEL_LOOP(i, *pillar_num) {
+    const auto &pillar_id = i;
+
+    int point_id = map_key_to_pillar_list[map_pillar_to_key[pillar_id]];
+    while (point_id >= 0) {
+      ListNode *cur_node = point_nodes + point_id;
+
+      int key = voxel_reso_z * pillar_id + cur_node->cord.z;
+
+      int pre_node_id = atomicExch(map_key_to_voxel_list + key, point_id);
+
+      if (pre_node_id == -1) {
+        int voxel_id = atomicAdd(valid_voxel_num, 1);
+        if (voxel_id < max_voxels) {
+          map_voxel_to_key[voxel_id] = key;
+        }
+      }
+
+      // move on to next
+      point_id = cur_node->next;
+      cur_node->next = pre_node_id;
+    } // end while
+  }
+}
+
 __global__ void GatherVoxelFromPoint( // clang-format off
-                                      // input
-                                      const float* __restrict__ points,
-                                      int point_num, // point number
-                                      int point_dim, // point dimension
-                                      const int * __restrict__ voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
-                                      const ListNode * __restrict__ point_nodes, // list node of each point, size: point_num
-                                      const int * __restrict__ output_voxel_hash_id, // out voxel hash id, size: max_voxels
-                                      int * __restrict__ valid_voxel_num, // valid voxel num addr
-                                      int max_voxels, // max output voxels
-                                      int max_points, // max num of points in a voxel
-                                      reduce_t reduce_type,
+  // input
+  const float* __restrict__ points, int point_num, int point_dim, // points
+  const ListNode * __restrict__ point_nodes, // point nodes store each point's info, filled by ScatterPointToVoxel
+  const int * __restrict__ map_key_to_list,
+  const int * __restrict__ map_voxel_to_key, // voxel id to head node id of the list of this voxel, size: max_voxels, filled by ScatterPointToVoxel
+  int * __restrict__ valid_voxel_num, // valid voxel num
+  int max_voxels, // max output voxels
+  int max_points, // max number of points in a voxel
+  reduce_t reduce_type, // how to reduce points in voxel
 
-                                      // tmp
-                                      float* voxel_dists,
+  // tmp
+  float* voxel_dists,
 
-                                      // output
-                                      float *voxels,
-                                      int* voxel_cords,
-                                      int* voxel_points
-                                    ) { // clang-format on
+  // output
+  float *voxels,
+  int* voxel_cords,
+  int* voxel_points
+) { // clang-format on
   CUDA_1D_KERNEL_LOOP(i, min(*valid_voxel_num, max_voxels)) {
     const auto &voxel_id = i;
     int voxel_point_num = reduce_type == reduce_t::NONE ? max_points : 1;
@@ -138,7 +159,7 @@ __global__ void GatherVoxelFromPoint( // clang-format off
     float &cur_voxel_dist = voxel_dists[voxel_id];
 
     // the list head
-    int cur_point_global_id = voxel_list_head_id[output_voxel_hash_id[i]];
+    int cur_point_global_id = map_key_to_list[map_voxel_to_key[voxel_id]];
 
     // NOTE: in reverse order
     cur_voxel_cord[0] = point_nodes[cur_point_global_id].cord.z;
@@ -178,84 +199,18 @@ __global__ void GatherVoxelFromPoint( // clang-format off
       voxel_point_id++;
     }
 
-    // record how final point number in voxel
-    voxel_points[i] = voxel_point_id;
+    // record how many final point number in voxel
+    voxel_points[voxel_id] = voxel_point_id;
+  }
 
-    // clip valid_voxel_num on thread 0
-    if (i == 0) {
-      int real_valid_voxel_num = min(*valid_voxel_num, max_voxels);
-      atomicExch(valid_voxel_num, real_valid_voxel_num);
-    }
+  // clip valid_voxel_num on thread 0
+  if (threadIdx.x == 0) {
+    int real_valid_voxel_num = min(*valid_voxel_num, max_voxels);
+    atomicExch(valid_voxel_num, real_valid_voxel_num);
   }
 }
 
 // clang-format off
-void VoxelizationAsync( 
-                       // input
-                       const float* points,  // input points data, point_num*point_dim
-                       int point_num,  // point number,
-                       int point_dim,  // point dimension,
-                       std::vector<float> point_range, // point cloud range
-                       std::vector<float> voxel_size, // voxel size
-                       std::vector<int32_t> voxel_reso, // grid size
-                       int max_voxels, // max output voxels
-                       int max_points, // max points in an voxel
-                       reduce_t reduce_type, // reduce type
-
-                       // tmp
-                       float* voxel_dists,
-                       int* voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
-                       ListNode* point_nodes, // list node of each point, size: point_num
-                       int* output_voxel_hash_id, // out voxel hash id, size: max_voxels
-
-                       // output
-                       float* voxels, // output voxels
-                       int* voxel_cords, // voxel coordinates
-                       int* voxel_points, // how many points in each voxel
-                       int* valid_voxel_num, // output valid voxel number, 1
-
-                       // cuda stream
-                       cudaStream_t stream
-                      ){ // clang-format on
-  // cuda kernel grid and block size
-  int block, grid;
-
-  // clang-format off
-    cudaOccupancyMaxPotentialBlockSize(&grid, &block, ScatterPointToVoxel, 0, point_num);
-    grid= std::min(grid, CeilDiv(point_num, block));
-    ScatterPointToVoxel<<<grid, block, 0, stream>>>(
-        points, point_num, point_dim, 
-        point_range[0], point_range[1], point_range[2], 
-        voxel_size[0], voxel_size[1], voxel_size[2], 
-        voxel_reso[0], voxel_reso[1], voxel_reso[2], 
-        max_voxels,
-        voxel_list_head_id,
-        point_nodes,
-        output_voxel_hash_id,
-        valid_voxel_num
-    );
-  // clang-format on
-
-  // clang-format off
-    cudaOccupancyMaxPotentialBlockSize(&grid, &block, GatherVoxelFromPoint, 0, max_voxels);
-    grid = std::min(grid, CeilDiv(max_voxels, block));
-    GatherVoxelFromPoint<<<grid, block, 0, stream>>>(
-                                        points, point_num, point_dim, // points
-                                        voxel_list_head_id, // store the voxel list head id, indexed by voxel hash id, size: grid_size[0]*grid_size[1]*grid_size[2]
-                                        point_nodes, // list node of each point, size: point_num
-                                        output_voxel_hash_id, // out voxel hash id, size: max_voxels
-                                        valid_voxel_num, // valid voxel num addr
-                                        max_voxels, // max output voxels
-                                        max_points, // max num of points in a voxel
-                                        reduce_type,
-                                        voxel_dists,
-                                        voxels, // output voxel data
-                                        voxel_cords, // output voxel cords
-                                        voxel_points
-    );
-  // clang-format on
-}
-
 } // namespace
 
 namespace voxelization {
@@ -270,51 +225,141 @@ void voxelize_gpu(const at::Tensor &points,
                  const reduce_t reduce_type,
                  at::Tensor &voxels, 
                  at::Tensor &coords,
-                 at::Tensor &point_num,
+                 at::Tensor &voxel_points,
                  at::Tensor &voxel_num){
   // clang-format on
   CHECK_INPUT(points);
   at::cuda::CUDAGuard device_guard(points.device());
 
-  // TODO: this new_full is the bottole neck of voxlization when voxel num is
-  // large, considering use thrust lib's hash map
-  at::Tensor voxel_list_head_id =
-      coords.new_full({voxel_reso[0], voxel_reso[1], voxel_reso[2]}, -1);
+  int point_num = points.size(0);
+  int point_dim = points.size(1);
 
-  at::Tensor points_node =
-      at::empty({points.size(0) * (int)sizeof(ListNode)},
-                coords.options().dtype(at::ScalarType::Byte));
+  // allocate device memory
+  bool pillar_only = (voxel_reso[2] <= 1);
+  int max_pillars = pillar_only ? max_voxels : point_num;
 
-  at::Tensor voxel_hash_id = at::empty({max_voxels}, coords.options());
+  int device_data_bytes = 0;
 
-  float *voxel_dists = nullptr;
-  if (reduce_type == reduce_t::NEAREST) {
-    cudaMalloc(&voxel_dists, sizeof(float) * max_voxels);
-  }
+  int point_nodes_bytes = point_num * sizeof(ListNode);
+  device_data_bytes += point_nodes_bytes;
+
+  int map_key_to_pillar_list_bytes =
+      voxel_reso[0] * voxel_reso[1] * sizeof(int);
+  device_data_bytes += map_key_to_pillar_list_bytes;
+
+  int map_pillar_to_key_bytes = max_pillars * sizeof(int);
+  device_data_bytes += map_pillar_to_key_bytes;
+
+  int voxel_dists_bytes =
+      reduce_type == reduce_t::NEAREST ? max_voxels * sizeof(float) : 0;
+  device_data_bytes += voxel_dists_bytes;
+
+  int map_key_to_voxel_list_bytes =
+      pillar_only ? 0 : (max_pillars * voxel_reso[2] * sizeof(int));
+  device_data_bytes += map_key_to_voxel_list_bytes;
+
+  int map_voxel_to_key_bytes = pillar_only ? 0 : (max_voxels * sizeof(int));
+  device_data_bytes += map_voxel_to_key_bytes;
+
+  int pillar_num_bytes = pillar_only ? 0 : sizeof(int);
+  device_data_bytes += pillar_num_bytes;
+
+  int8_t *device_data;
+  cudaMalloc(&device_data, device_data_bytes);
+  // printf("device_data_bytes: %d", device_data_bytes);
 
   // clang-format off
-  VoxelizationAsync(points.contiguous().data_ptr<float>(), 
-                    points.size(0),
-                    points.size(1),
-                    point_range,
-                    voxel_size,
-                    voxel_reso,
-                    max_voxels,
-                    max_points,
-                    reduce_type,
-                    voxel_dists,
-                    voxel_list_head_id.contiguous().data_ptr<int>(),
-                    (ListNode*)points_node.contiguous().data_ptr<uint8_t>(),
-                    voxel_hash_id.contiguous().data_ptr<int>(),
-                    voxels.contiguous().data_ptr<float>(),
-                    coords.contiguous().data_ptr<int>(),
-                    point_num.contiguous().data_ptr<int>(),
-                    voxel_num.contiguous().data_ptr<int>(),
-                    at::cuda::getCurrentCUDAStream()
-                    );
+  int8_t *point_nodes_data            = device_data;
+  int8_t *map_key_to_pillar_list_data = point_nodes_data + point_nodes_bytes;
+  int8_t *map_pillar_to_key_data      = map_key_to_pillar_list_data + map_key_to_pillar_list_bytes;
+  int8_t *voxel_dists_data            = map_pillar_to_key_data + map_pillar_to_key_bytes;
+  int8_t *map_key_to_voxel_list_data  = voxel_dists_data + voxel_dists_bytes;
+  int8_t *map_voxel_to_key_data       = map_key_to_voxel_list_data + map_key_to_voxel_list_bytes;
+  int8_t *pillar_num_data             = map_voxel_to_key_data + map_voxel_to_key_bytes;
   // clang-format on
 
-  cudaDeviceSynchronize();
+  // map_key_to_pillar_list -> -1
+  at::from_blob(map_key_to_pillar_list_data, {voxel_reso[0], voxel_reso[1]},
+                coords.options())
+      .fill_(-1);
+
+  // map_key_to_voxel_list -> -1
+  if (map_key_to_voxel_list_bytes > 0) {
+    at::from_blob(map_key_to_voxel_list_data, {max_pillars, voxel_reso[2]},
+                  coords.options())
+        .fill_(-1);
+  }
+
+  // pillar_num -> 0
+  if (pillar_num_bytes > 0) {
+    cudaMemsetAsync(pillar_num_data, 0, sizeof(int),
+                    at::cuda::getCurrentCUDAStream());
+  }
+
+  int block, grid;
+
+  // clang-format off
+  // point to pillar
+  cudaOccupancyMaxPotentialBlockSize(&grid, &block, ScatterPointToPillar, 0, point_num);
+  grid= std::min(grid, CeilDiv(point_num, block));
+  ScatterPointToPillar<<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(
+      points.data_ptr<float>(), point_num,  point_dim,
+      point_range[0], point_range[1], point_range[2],
+      voxel_size[0],  voxel_size[1],  voxel_size[2],
+      voxel_reso[0],  voxel_reso[1],  voxel_reso[2],
+      max_pillars,
+      (reduce_type==reduce_t::NEAREST), // whether record distance
+
+      // output
+      (ListNode*)point_nodes_data, // companion node of each point, same number as points
+      (int *)map_key_to_pillar_list_data, // point key to pillar id hash map, initialized to -1, size: pillar_reso_x*pillar_reso_y
+      (int *)map_pillar_to_key_data, // pillar id to head node id of the list of this pillar, size: max_pillars, initialized to -1(if append_to_pillar set to true)
+      pillar_only?voxel_num.data_ptr<int>():(int*)pillar_num_data // valid pillar number, init to 0
+  );
+
+  // point to voxel if needed
+  if(!pillar_only){
+      cudaOccupancyMaxPotentialBlockSize(&grid, &block, ScatterPillarPointToVoxel, 0, point_num);
+      grid= std::min(grid, CeilDiv(point_num, block));
+      ScatterPillarPointToVoxel<<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(
+          points.data_ptr<float>(), point_num, point_dim,
+          (ListNode *) point_nodes_data,
+          (int *) map_key_to_pillar_list_data,
+          (int *) map_pillar_to_key_data,
+          (int* )pillar_num_data,
+          point_range[2],
+          voxel_size[2],
+          voxel_reso[2],
+          max_voxels,
+          (int *)map_key_to_voxel_list_data,
+          (int *)map_voxel_to_key_data,
+          voxel_num.data_ptr<int>()
+      );
+  }else{
+    map_key_to_voxel_list_data = map_key_to_pillar_list_data;
+    map_voxel_to_key_data = map_pillar_to_key_data;
+  }
+
+  // gather voxel/pillar from points
+  cudaOccupancyMaxPotentialBlockSize(&grid, &block, GatherVoxelFromPoint, 0, max_voxels);
+  grid = std::min(grid, CeilDiv(max_voxels, block));
+  GatherVoxelFromPoint<<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(
+      points.data_ptr<float>(), point_num, point_dim,
+      (ListNode *) point_nodes_data,
+      (int *) map_key_to_voxel_list_data, // voxel id to head node id of the list of this voxel, size: max_voxels, filled by ScatterPointToVoxel
+      (int *) map_voxel_to_key_data, // voxel id to head node id of the list of this voxel, size: max_voxels, filled by ScatterPointToVoxel
+      voxel_num.data_ptr<int>(),
+      max_voxels,
+      max_points,
+      reduce_type,
+      (float*) voxel_dists_data,
+      voxels.data_ptr<float>(),
+      coords.data_ptr<int>(),
+      voxel_points.data_ptr<int>()
+  );
+  // clang-format on
+
+  cudaFree(device_data);
   AT_CUDA_CHECK(cudaGetLastError());
 }
 

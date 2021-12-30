@@ -59,7 +59,7 @@ class _Voxelize(Function):
 
         voxels = points.new_zeros(
             size=(max_voxels, max_points if not reduce_type else 1, points.size(-1)))
-        coords = points.new_zeros(size=(max_voxels, 3), dtype=torch.int)
+        coords = points.new_empty(size=(max_voxels, 3), dtype=torch.int)
         point_num = points.new_zeros(size=(max_voxels, ), dtype=torch.int)
         voxel_num = points.new_zeros(size=(), dtype=torch.int)
 

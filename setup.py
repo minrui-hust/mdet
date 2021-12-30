@@ -8,16 +8,17 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 def make_cuda_ext(name,
                   module,
                   sources,
-                  extra_args=[],
+                  cuda_extra_args=[],
+                  cpp_extra_args=[],
                   extra_include_path=[]):
 
     if not torch.cuda.is_available():
         raise EnvironmentError('CUDA is required to compile this package!')
 
-    extra_compile_args = {'cxx': extra_args + [],
-                          'nvcc': extra_args + ['-D__CUDA_NO_HALF_OPERATORS__',
-                                                '-D__CUDA_NO_HALF_CONVERSIONS__',
-                                                '-D__CUDA_NO_HALF2_OPERATORS__']}
+    extra_compile_args = {'cxx': cpp_extra_args + [],
+                          'nvcc': cuda_extra_args + ['-D__CUDA_NO_HALF_OPERATORS__',
+                                                     '-D__CUDA_NO_HALF_CONVERSIONS__',
+                                                     '-D__CUDA_NO_HALF2_OPERATORS__']}
 
     return CUDAExtension(
         name='{}.{}'.format(module, name),
@@ -125,6 +126,7 @@ if __name__ == '__main__':
             make_cuda_ext(
                 name='voxelization',
                 module='mdet.ops.voxelization',
+                cuda_extra_args=['-g', '-G'],
                 sources=[
                     'src/voxelization.cpp',
                     'src/voxelization_cpu.cpp',

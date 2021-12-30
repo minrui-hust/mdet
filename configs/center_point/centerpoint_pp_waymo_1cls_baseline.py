@@ -115,6 +115,7 @@ dataloader_train = dict(
     batch_size=batch_size,
     num_workers=4,
     shuffle=True,
+    pin_memory=True,
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path='/data/tmp/waymo/training_info.pkl',
