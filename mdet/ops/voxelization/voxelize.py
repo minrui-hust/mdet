@@ -57,11 +57,11 @@ class _Voxelize(Function):
         '''
         assert max_points >= 0
 
-        voxels = points.new_zeros(
+        voxels = points.new_empty(
             size=(max_voxels, max_points if not reduce_type else 1, points.size(-1)))
         coords = points.new_empty(size=(max_voxels, 3), dtype=torch.int)
-        point_num = points.new_zeros(size=(max_voxels, ), dtype=torch.int)
-        voxel_num = points.new_zeros(size=(), dtype=torch.int)
+        point_num = points.new_empty(size=(max_voxels, ), dtype=torch.int)
+        voxel_num = points.new_empty(size=(), dtype=torch.int)
 
         # force max_points to 1 when reduce_type is 'first'
         if reduce_type == 'first':

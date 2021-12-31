@@ -121,8 +121,11 @@ void voxelize_cpu(const at::Tensor &points,
   AT_ASSERTM(points.device().is_cpu(), "points must be a CPU tensor");
 
   // indexed by z,y,x, initialize to -1
-  at::Tensor voxel_coord_to_idx = -at::ones(
-      {voxel_reso[2], voxel_reso[1], voxel_reso[0]}, coords.options());
+  at::Tensor voxel_coord_to_idx = at::full(
+      {voxel_reso[2], voxel_reso[1], voxel_reso[0]}, -1, coords.options());
+
+  point_num.fill_(0);
+  voxel_num.fill_(0);
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       points.scalar_type(), "voxelize_cpu", [&] {
