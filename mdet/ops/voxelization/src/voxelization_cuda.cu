@@ -210,9 +210,15 @@ __global__ void GatherVoxelFromPoint( // clang-format off
     cur_voxel_cord[1] = point_nodes[cur_point_global_id].cord.y;
     cur_voxel_cord[2] = point_nodes[cur_point_global_id].cord.x;
 
+    if (reduce_type == reduce_t::MEAN) {
+      for (auto j = 0; j < point_dim; ++j) {
+        cur_voxel[j] = 0;
+      }
+    }
+
     // loop utils list end or max_points reached
     int voxel_point_id = 0;
-    while (cur_point_global_id >= 0 &&
+    while ((cur_point_global_id >= 0 || reduce_type == NONE) &&
            (voxel_point_id < max_points || max_points == 0)) {
       if (reduce_type == reduce_t::MEAN) {
         for (auto j = 0; j < point_dim; ++j) {
@@ -234,17 +240,21 @@ __global__ void GatherVoxelFromPoint( // clang-format off
       } else { // NONE, FIRST
         for (auto j = 0; j < point_dim; ++j) {
           cur_voxel[voxel_point_id * point_dim + j] =
-              points[cur_point_global_id * point_dim + j];
+              cur_point_global_id >= 0
+                  ? points[cur_point_global_id * point_dim + j]
+                  : 0;
         }
       }
 
       // move to next point
-      cur_point_global_id = point_nodes[cur_point_global_id].next;
       voxel_point_id++;
+      if (cur_point_global_id >= 0) {
+        cur_point_global_id = point_nodes[cur_point_global_id].next;
+      }
     }
 
     // record how many final point number in voxel
-    voxel_points[voxel_id] = voxel_point_id;
+    voxel_points[voxel_id] = min(voxel_point_id, max_points);
   }
 
   // clip valid_voxel_num on thread 0

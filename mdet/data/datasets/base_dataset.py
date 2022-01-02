@@ -38,16 +38,17 @@ class MDetDataset(TorchDataset):
             sample_list = []
             for i in info:
                 sample = Sample()
-                self.load(sample, i)
-                self.transform(sample, i)
-                sample_list.append(sample)
+                self.process(sample, i)
             return sample_list
         else:
             sample = Sample()
-            self.load(sample, info)
-            self.transform(sample, info)
-            self.encode(sample, info)
+            self.process(sample, info)
             return sample
+
+    def process(self, sample, info):
+        self.load(sample, info)
+        self.transform(sample, info)
+        self.encode(sample, info)
 
     def load(self, sample, info):
         r'''

@@ -9,6 +9,7 @@ class RangeFilter(object):
     '''
 
     def __init__(self, point_range):
+        super().__init__()
         self.point_range = np.array(point_range, dtype=np.float32)
 
     def __call__(self, sample, info):

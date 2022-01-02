@@ -29,6 +29,8 @@ def parse_args():
         '--work_dir', default='./log', help='the folder logs store')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
+    parser.add_argument('--amp', default=False, action='store_true',
+                        help='wether to do mix-precision training')
     parser.add_argument('--overfit', type=int, default=0,
                         help='overfit batch num, used for debug')
     parser.add_argument('--profile', default=False, action='store_true',
@@ -86,6 +88,7 @@ def main(args):
             filename='profile',
             schedule=torch.profiler.schedule(
                 wait=2, warmup=2, active=6, repeat=1),
+            record_shapes=True,
         )
 
     # setup trainner
@@ -99,6 +102,7 @@ def main(args):
         strategy='ddp' if len(args.gpu) > 1 else None,
         overfit_batches=args.overfit,
         profiler=profiler,
+        precision=16 if args.amp else 32,
     )
 
     # do fit

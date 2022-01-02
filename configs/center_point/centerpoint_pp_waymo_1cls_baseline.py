@@ -55,7 +55,7 @@ model_train = dict(
     ),
     head=dict(
         type='CenterHead',
-        in_channels=3*128,
+        in_channels=3 * 128,
         shared_conv_channels=64,
         init_bias=-2.19,
         heads={
@@ -126,6 +126,7 @@ dataloader_train = dict(
         ),
         transforms=[
             dict(type='RangeFilter', point_range=point_range),
+            dict(type='PcdIntensityNormlizer'),
         ],
     ),
 )

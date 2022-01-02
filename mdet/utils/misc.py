@@ -1,5 +1,6 @@
-
 from collections import abc
+import torch
+
 
 def is_seq_of(seq, expected_type, seq_type=None):
     """Check whether it is a sequence of some type.
@@ -47,3 +48,24 @@ def is_str(x):
     Note: This method is deprecated since python 2 is no longer supported.
     """
     return isinstance(x, str)
+
+
+def is_nan_or_inf(x, name='tensor'):
+    if isinstance(x, list) or isinstance(x, tuple):
+        for i, element in enumerate(x):
+            is_nan_or_inf(element, f'{name}.{i}')
+    elif isinstance(x, dict):
+        for k, v in x.items():
+            is_nan_or_inf(v, f'{name}.{k}')
+    elif torch.is_tensor(x):
+        if x.isnan().any():
+            print(f'{name} has nan')
+            return True
+        if x.isinf().any():
+            if x.isneginf().any():
+                print(f'{name} has -inf')
+                return True
+            else:
+                print(f'{name} has +inf')
+                return True
+    return False
