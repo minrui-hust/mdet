@@ -2,8 +2,6 @@ from functools import partial
 import math
 import os
 
-from matplotlib.patches import Rectangle
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -254,6 +252,9 @@ class CenterPointCodec(BaseCodec):
         return FI.create(collator_cfg)
 
     def plot(self, sample, show_pcd=True, show_heatmap_gt=False, show_heatmap_pred=True, show_box=True):
+        from matplotlib.patches import Rectangle
+        import matplotlib.pyplot as plt
+
         fig = plt.figure()
         ax = fig.add_subplot(111, aspect='equal')
 
@@ -317,7 +318,7 @@ class CenterPointCodec(BaseCodec):
 
         # if is B x N, convert to B x N x 2
         if cords.dim() == 2:
-            cords_y = cords//grid_reso[0]
+            cords_y = torch.div(cords, grid_reso[0], rounding_mode='trunc')
             cords_x = cords % grid_reso[0]
             cords = torch.stack([cords_x, cords_y], dim=-1)
 

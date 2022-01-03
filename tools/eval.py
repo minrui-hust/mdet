@@ -47,6 +47,8 @@ def parse_args():
                         Loader=yaml.FullLoader), default='{}', help='show model prediction')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
+    parser.add_argument('--amp', default=False, action='store_true',
+                        help='wether to do mix-precision training')
     parser.add_argument('--overfit', type=int, default=0,
                         help='overfit batch num, used for debug')
     parser.add_argument('--profile', default=False, action='store_true',
@@ -81,8 +83,8 @@ def main(args):
         print(f'show_pred_args:\n{args.show_pred_args}')
 
     def step_hook(sample, module):
-        #  sample.to('cpu')
         if args.show_output:
+            sample.to('cpu')
             module.eval_codec.plot(sample, **args.show_output_args)
 
         if args.show_pred:
@@ -141,7 +143,8 @@ def main(args):
         sync_batchnorm=len(args.gpu) > 1,
         strategy='ddp' if len(args.gpu) > 1 else None,
         overfit_batches=args.overfit,
-        profiler=profiler
+        profiler=profiler,
+        precision=16 if args.amp else 32,
     )
 
     # do validation

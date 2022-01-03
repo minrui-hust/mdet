@@ -13,7 +13,7 @@ out_grid_size = [0.64, 0.64]
 out_grid_reso = [236, 236]
 
 batch_size = 2
-max_epochs = 48
+max_epochs = 96
 
 # model config
 model_train = dict(

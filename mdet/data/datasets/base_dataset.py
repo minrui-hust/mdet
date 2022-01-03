@@ -1,11 +1,9 @@
 import numpy as np
-import open3d as o3d
 from torch.utils.data import Dataset as TorchDataset
 
 from mdet.data.sample import Sample
 from mdet.utils.factory import FI
 import mdet.utils.io as io
-from mdet.utils.viz import Visualizer
 
 
 class MDetDataset(TorchDataset):
@@ -131,6 +129,7 @@ class MDet3dDataset(MDetDataset):
         r'''
         plot standard 3d detection sample using open3d
         '''
+        from mdet.utils.viz import Visualizer
 
         vis = Visualizer()
         vis.add_points(sample['data']['pcd'].points)
