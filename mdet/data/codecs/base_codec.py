@@ -69,3 +69,6 @@ class BaseCodec(object):
         encode anno to gt for training and evaluation
         '''
         raise NotImplementedError
+
+    def get_export_info(self, batch):
+        raise NotImplementedError

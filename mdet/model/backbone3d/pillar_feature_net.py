@@ -1,13 +1,14 @@
+import math
+
 import torch
+from torch.autograd.profiler import record_function
 import torch.nn as nn
 import torch.nn.functional as F
 
 from mdet.model import BaseModule
-from mdet.utils.factory import FI
 from mdet.model.utils import construct_mask
-from torch.profiler import record_function
-
-import math
+from mdet.ops.dense import dense
+from mdet.utils.factory import FI
 
 
 @FI.register
@@ -74,23 +75,24 @@ class PillarFeatureNet(BaseModule):
 
         return feature_image
 
-    def colloate(self, voxelization_result):
-        r'''
-        collate the voxelization output to tensors
-        '''
+    def forward_infer(self, voxelization_result):
+        voxels = voxelization_result['voxels']
+        coords = voxelization_result['coords']
+        point_nums = voxelization_result['point_nums']
+        voxel_nums = voxelization_result['voxel_nums']
 
-        voxels, coords, point_nums, voxel_nums = [], [], [], []
-        for i, (voxel, coord, point_num, voxel_num) in enumerate(voxelization_result):
-            voxels.append(voxel[:voxel_num])
-            coords.append(F.pad(coord[:voxel_num], (1, 0), value=i))
-            point_nums.append(point_num[:voxel_num])
+        # construct pillar feature from raw points
+        pillar_feature = self.construct_pillar(voxels, coords, point_nums)
 
-        # stack along batch dimension
-        voxels = torch.cat(voxels, dim=0)
-        coords = torch.cat(coords, dim=0)
-        point_nums = torch.cat(point_nums, dim=0)
+        # pass through pfn layers
+        mask = construct_mask(point_nums, voxels.size(-2), inverse=True)
+        for pfn in self.pfn_layers:
+            pillar_feature = pfn(pillar_feature, mask)
 
-        return voxels, coords, point_nums
+        # in shape [1, channels, W, H]
+        feature_image = dense(pillar_feature, coords, voxel_nums, self.voxel_reso).unsqueeze(0)
+
+        return feature_image
 
     def construct_pillar(self, voxels, coords, point_nums):
         r'''

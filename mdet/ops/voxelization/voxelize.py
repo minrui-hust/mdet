@@ -1,24 +1,10 @@
 import torch
 from torch.autograd import Function
 from .voxelization import OpVoxelization
+from torch._C import Graph
 
 
 class _Voxelize(Function):
-
-    @staticmethod
-    def get_reduce_type(reduce_type_str):
-        if not reduce_type_str:
-            reduce_type = 0
-        elif reduce_type_str == 'mean':
-            reduce_type = 1
-        elif reduce_type_str == 'first':
-            reduce_type = 2
-        elif reduce_type_str == 'nearest':
-            reduce_type = 3
-        else:
-            raise NotImplementedError
-        return reduce_type
-
     @staticmethod
     def forward(ctx,
                 points,
@@ -27,8 +13,8 @@ class _Voxelize(Function):
                 voxel_reso,
                 max_points=32,
                 max_voxels=20000,
-                reduce_type=None,
-                keep_dim=False):
+                reduce_type=None
+                ):
         r'''convert kitti points NxD(D>=3) to voxels.
 
         Args:
@@ -46,7 +32,6 @@ class _Voxelize(Function):
                 Users should shuffle points before call this function because max_voxels may drop points.
             reduce_type: reduction method of points in a voxel, available type are:
                 'mean', 'first', 'nearest'.
-            keep_dim: whether keep the reduced dimension
 
         Returns:
             voxels: [max_voxels, max_points, ndim] or [max_voxels, ndim] float32 tensor.
@@ -63,19 +48,13 @@ class _Voxelize(Function):
         point_num = points.new_empty(size=(max_voxels, ), dtype=torch.int)
         voxel_num = points.new_empty(size=(), dtype=torch.int)
 
-        if reduce_type == 'first':  # force max_points to 1 when reduce_type is 'first'
-            max_points = 1
-
-        OpVoxelization(points, point_range, voxel_size, voxel_reso, max_points, max_voxels, _Voxelize.get_reduce_type(reduce_type),
-                       voxels, coords, point_num, voxel_num)
-
-        if reduce_type and not keep_dim:
-            voxels = voxels.squeeze(1)
+        OpVoxelization(points, point_range, voxel_size, voxel_reso, max_points,
+                       max_voxels, reduce_type, voxels, coords, point_num, voxel_num)
 
         return voxels, coords, point_num, voxel_num
 
     @staticmethod
-    def symbolic(g, points, point_range, voxel_size, voxel_reso, max_points, max_voxels, reduce_type, keep_dim):
+    def symbolic(g, points, point_range, voxel_size, voxel_reso, max_points, max_voxels, reduce_type):
         return g.op(
             'custom_ops::Voxelization',
             points,
@@ -85,8 +64,41 @@ class _Voxelize(Function):
             max_points_i=max_points,
             max_voxels_i=max_voxels,
             reduce_type_i=reduce_type,
-            keep_dim_i=keep_dim,
             outputs=4)
 
 
-Voxelize = _Voxelize.apply
+def Voxelize(points,
+             point_range,
+             voxel_size,
+             voxel_reso,
+             max_points=32,
+             max_voxels=20000,
+             reduce_type=None,
+             keep_dim=False):
+
+    if reduce_type == 'first':  # force max_points to 1 when reduce_type is 'first'
+        max_points = 1
+
+    if reduce_type is None:
+        reduce_type = 0
+    elif reduce_type == 'mean':
+        reduce_type = 1
+    elif reduce_type == 'first':
+        reduce_type = 2
+    elif reduce_type == 'nearest':
+        reduce_type = 3
+    else:
+        raise NotImplementedError
+
+    voxels, coords, point_num, voxel_num = _Voxelize.apply(points,
+                                                           point_range,
+                                                           voxel_size,
+                                                           voxel_reso,
+                                                           max_points,
+                                                           max_voxels,
+                                                           reduce_type)
+
+    if reduce_type > 0 and not keep_dim:
+        voxels = voxels.squeeze(-2)
+
+    return voxels, coords, point_num, voxel_num

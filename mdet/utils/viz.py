@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import open3d as o3d
+import math
 
 
 class Visualizer(object):
@@ -36,8 +37,8 @@ class Visualizer(object):
         self.app.initialize()
 
         self.viz = o3d.visualization.O3DVisualizer("Open3D", 1920, 1080)
-        self.viz.ground_plane=o3d.visualization.rendering.Scene.GroundPlane.XY
-        self.viz.show_ground=True
+        self.viz.ground_plane = o3d.visualization.rendering.Scene.GroundPlane.XY
+        self.viz.show_ground = True
         self.viz.show_skybox(False)
 
         # record pcd added
@@ -50,7 +51,8 @@ class Visualizer(object):
         if not isinstance(point_color, np.ndarray):
             point_color = np.array(point_color)
             if point_color.ndim == 1:
-                point_color = np.broadcast_to(point_color, (points.shape[0], 3))
+                point_color = np.broadcast_to(
+                    point_color, (points.shape[0], 3))
 
         points = points.copy()
         pcd = o3d.geometry.PointCloud()
@@ -60,7 +62,6 @@ class Visualizer(object):
         self.viz.point_size = point_size
         self.viz.add_geometry('pointcloud', pcd)
         self.pcd = pcd
-
 
     def add_box(self, boxes, box_color=(0.8, 0.1, 0.1), box_label=None, paint_point_in_box=True, prefix=''):
         r'''
@@ -79,9 +80,11 @@ class Visualizer(object):
         for i, (box, color) in enumerate(zip(boxes, box_color)):
             center = box[0:3]
             dim = box[3:6]
-            rotm = o3d.geometry.get_rotation_matrix_from_xyz(np.array([0,0,box[6]]))
+            rotm = o3d.geometry.get_rotation_matrix_from_xyz(
+                np.array([0, 0, math.atan2(box[7], box[6])]))
             o3d_box = o3d.geometry.OrientedBoundingBox(center, rotm, dim)
-            line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(o3d_box)
+            line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(
+                o3d_box)
             line_set.paint_uniform_color(color)
             self.viz.add_geometry(f'{prefix}_box_{i}', line_set)
             if box_label is not None:
@@ -89,13 +92,13 @@ class Visualizer(object):
 
             #  change the color of points which are in box
             if paint_point_in_box and self.pcd is not None:
-                indices = o3d_box.get_point_indices_within_bounding_box(self.pcd.points)
+                indices = o3d_box.get_point_indices_within_bounding_box(
+                    self.pcd.points)
                 np.asarray(self.pcd.colors)[indices] = color
 
         if self.pcd is not None:
             self.viz.remove_geometry('pointcloud')
             self.viz.add_geometry('pointcloud', self.pcd)
-
 
     def show(self):
         self.viz.reset_camera_to_default()

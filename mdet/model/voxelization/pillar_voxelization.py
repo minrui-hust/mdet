@@ -63,3 +63,26 @@ class PillarVoxelization(BaseModule):
         point_nums = torch.cat(point_nums, dim=0)
 
         return voxels, coords, point_nums
+
+    def forward_infer(self, points):
+        voxel, coord, point_num, voxel_num= Voxelize(points,
+                                                     self.point_range,
+                                                     self.voxel_size,
+                                                     self.voxel_reso,
+                                                     self.max_points,
+                                                     self.max_voxels,
+                                                     self.reduce_type,
+                                                     self.keep_dim)
+
+        return dict(
+            voxels=voxel,
+            coords=coord,
+            point_nums=point_num,
+            voxel_nums = voxel_num,
+            shape=list(reversed(self.voxel_reso)),
+        )
+
+
+
+
+     

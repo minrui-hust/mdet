@@ -4,11 +4,8 @@ import os
 import os.path as osp
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-import pytorch_lightning.loggers as loggers
 from pytorch_lightning.profiler import PyTorchProfiler
 import torch
-from torch.profiler.profiler import tensorboard_trace_handler
 import yaml
 
 import mdet.data

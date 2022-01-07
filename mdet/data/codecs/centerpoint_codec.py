@@ -82,7 +82,7 @@ class CenterPointCodec(BaseCodec):
         size = np.log(boxes[:, 3:6])
 
         # heading, in complex number format
-        heading = np.stack((np.cos(boxes[:, 6]), np.sin(boxes[:, 6])), axis=-1)
+        heading = boxes[:, 6:]
 
         # heatmap
         heatmap = np.zeros(
@@ -107,12 +107,13 @@ class CenterPointCodec(BaseCodec):
                             size=torch.from_numpy(size),
                             heading=torch.from_numpy(heading),
                             heatmap=torch.from_numpy(heatmap),
-                            positive_indices=torch.from_numpy(positive_indices),
+                            positive_indices=torch.from_numpy(
+                                positive_indices),
                             positive_heatmap_indices=torch.from_numpy(
                                 positive_heatmap_indices),
                             )
 
-    def decode(self, output, batch):
+    def decode(self, output, batch=None, infer=False):
         r'''
         output --> pred
         '''
@@ -151,23 +152,31 @@ class CenterPointCodec(BaseCodec):
         nms_boxes[..., 1] = topk_boxes[..., 1] - half_h
         nms_boxes[..., 2] = topk_boxes[..., 0] + half_w
         nms_boxes[..., 3] = topk_boxes[..., 1] + half_h
-        nms_boxes[..., 4] = -topk_boxes[..., 6]
+        #  nms_boxes[..., 4] = -topk_boxes[..., 6]
+        nms_boxes[..., 4] = -torch.atan2(topk_boxes[..., 7], topk_boxes[..., 6])
 
         # do nms for each sample
         pred_list = []
-        for i in range(batch['_info_']['size']):
+        batch_size = 1 if batch is None else batch['_info_']['size']
+        for i in range(batch_size):
             keep_indices, valid_num = nms(
                 nms_boxes[i],
                 topk_score[i],
                 self.decode_cfg['nms_cfg']['post_num'],
                 self.decode_cfg['nms_cfg']['overlap_thresh'],
             )
-            valid_indices = keep_indices[:valid_num]
-            det_box = topk_boxes[i][valid_indices]
-            det_label = topk_label[i][valid_indices]
-            det_score = topk_score[i][valid_indices]
-            pred = Annotation3d(
-                boxes=det_box.cpu().numpy(), types=det_label.cpu().numpy(), scores=det_score.cpu().numpy())
+            if not infer:
+                valid_indices = keep_indices[:valid_num]
+                det_box = topk_boxes[i][valid_indices]
+                det_label = topk_label[i][valid_indices]
+                det_score = topk_score[i][valid_indices]
+                pred = Annotation3d(boxes=det_box.cpu().numpy(
+                ), types=det_label.cpu().numpy(), scores=det_score.cpu().numpy())
+            else:
+                det_box = topk_boxes[i][keep_indices]
+                det_label = topk_label[i][keep_indices]
+                det_score = topk_score[i][keep_indices]
+                pred = (det_box, det_score, det_label, valid_num)
             pred_list.append(pred)
 
         return pred_list
@@ -319,7 +328,9 @@ class CenterPointCodec(BaseCodec):
         # if is B x N, convert to B x N x 2
         if cords.dim() == 2:
             cords_y = torch.div(cords, grid_reso[0], rounding_mode='trunc')
-            cords_x = cords % grid_reso[0]
+            #  cords_x = cords % grid_reso[0]
+            # workaround for tensorrt
+            cords_x = cords - (cords_y * grid_reso[0])
             cords = torch.stack([cords_x, cords_y], dim=-1)
 
         grid_center = cords * grid_size + grid_offset
@@ -330,13 +341,20 @@ class CenterPointCodec(BaseCodec):
 
         decoded_box_size = torch.exp(boxes[..., 3:6])
 
-        decoded_box_rot = torch.atan2(boxes[..., [7]], boxes[..., [6]])
+        decoded_box_heading = boxes[..., 6:]
 
         decoded_box = torch.cat([
             decoded_box_xy,
             decoded_box_z,
             decoded_box_size,
-            decoded_box_rot
+            decoded_box_heading,
         ], dim=-1)
 
         return decoded_box
+
+    def get_export_info(self, batch):
+        input = (batch['input']['pcd'][0], )
+        input_name = ['points']
+        output_name = ['box', 'score', 'type', 'valid']
+        dynamic_axes = {'points': {0: 'point_num'}}
+        return input, input_name, output_name, dynamic_axes

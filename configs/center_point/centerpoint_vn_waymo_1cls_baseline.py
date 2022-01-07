@@ -14,7 +14,7 @@ out_grid_size = [0.8, 0.8]
 out_grid_reso = [188, 188]
 
 batch_size = 2
-max_epochs = 32
+max_epochs = 96
 
 # model config
 # model for training
@@ -121,6 +121,7 @@ dataloader_train = dict(
         ),
         transforms=[
             dict(type='RangeFilter', point_range=point_range),
+            dict(type='PcdIntensityNormlizer'),
         ],
     ),
 )
@@ -175,7 +176,7 @@ runtime = dict(
     train=dict(
         logger=[
             dict(type='TensorBoardLogger',),
-            dict(type='CSVLogger',),
+            #  dict(type='CSVLogger',),
         ],
     ),
     val=dict(output_folder=None, evaluate=False),

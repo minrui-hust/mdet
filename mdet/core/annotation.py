@@ -4,8 +4,8 @@ class Annotation3d(object):
         super().__init__()
 
         r'''
-        shape: N x 7, float32
-        encode: [center_x, center_y, center_z, size_x, size_y, size_z, rot]
+        shape: N x 8, float32
+        encode: [center_x, center_y, center_z, size_x, size_y, size_z, cos_alpha, sin_alpha]
         rot: the box x axis relative to global x axis in counter-clock wise direction
         '''
         self.boxes = boxes

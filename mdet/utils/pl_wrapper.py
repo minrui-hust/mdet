@@ -1,5 +1,6 @@
 import itertools
 import os
+import torch
 
 import pytorch_lightning as pl
 import torch.optim as optim
@@ -57,9 +58,11 @@ class PlWrapper(pl.LightningModule):
             self.val_interest_set |= {'anno', 'pred'}
             self.val_epoch_interest_set |= {'anno', 'pred'}
 
-    def forward(self, batch):
-        # TODO: for infer
-        raise NotImplementedError
+    def forward(self, *input):
+        # forward is used for export
+        output = self.infer_model(*input)
+        pred = self.infer_codec.decode(output, infer=True)
+        return pred
 
     def training_step(self, batch, batch_idx):
         output = self.train_model(batch)
@@ -267,3 +270,27 @@ class PlWrapper(pl.LightningModule):
 
     def on_test_start(self):
         self.track_model(self.train_model, self.eval_model)
+
+    def export(self, output_file='tmp.onnx', **kwargs):
+        # model
+        self.cuda()
+        self.track_model(self.train_model, self.infer_model)
+
+        # data
+        batch = iter(self.test_dataloader()).next().select(
+            ['input']).to('cuda')
+
+        input, input_name, output_name, dynamic_axes = self.infer_codec.get_export_info(
+            batch)
+
+        # export
+        torch.onnx.export(self,
+                          input,
+                          output_file,
+                          input_names=input_name,
+                          output_names=output_name,
+                          dynamic_axes=dynamic_axes,
+                          keep_initializers_as_inputs=False,
+                          opset_version=11,
+                          operator_export_type=torch.onnx.OperatorExportTypes.ONNX,
+                          **kwargs)

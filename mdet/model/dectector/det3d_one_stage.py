@@ -30,3 +30,11 @@ class Det3dOneStage(BaseModule):
         head_out = self.head(neck_out)
         #  is_nan_or_inf(head_out, 'head_out')
         return head_out
+
+    def forward_infer(self, points):
+        voxel_out = self.voxelization(points)
+        bb3d_out = self.backbone3d(voxel_out)
+        bb2d_out = self.backbone2d(bb3d_out)
+        neck_out = self.neck(bb2d_out)
+        head_out = self.head(neck_out)
+        return head_out

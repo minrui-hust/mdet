@@ -108,6 +108,7 @@ codec_train = dict(
 codec_eval = deepcopy(codec_train)
 
 codec_infer = deepcopy(codec_train)
+codec_infer['encode_cfg']['encode_anno'] = False
 
 
 # data config
@@ -140,7 +141,6 @@ dataloader_test = deepcopy(dataloader_train)
 dataloader_test['shuffle'] = False
 dataloader_test['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
 
-
 # collect config
 model = dict(
     train=model_train,
@@ -150,8 +150,8 @@ model = dict(
 
 codec = dict(
     train=codec_train,
-    eval=codec_train,
-    infer=codec_train,
+    eval=codec_eval,
+    infer=codec_infer,
 )
 
 data = dict(

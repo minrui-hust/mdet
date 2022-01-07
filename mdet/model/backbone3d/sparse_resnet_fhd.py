@@ -1,6 +1,6 @@
 
-import spconv
-from spconv import SparseConv3d, SubMConv3d
+import spconv.pytorch as spconv
+from spconv.pytorch import SparseConv3d, SubMConv3d
 from torch import nn
 from torch.nn import functional as F
 from mdet.utils.factory import FI
@@ -45,18 +45,18 @@ class SparseBasicBlock(spconv.SparseModule):
 
     def forward(self, x):
         out = self.conv1(x)
-        out.features = self.bn1(out.features)
-        out.features = F.relu(out.features)
+        out = out.replace_feature(self.bn1(out.features))
+        out = out.replace_feature(F.relu(out.features))
 
         out = self.conv2(out)
-        out.features = self.bn2(out.features)
+        out = out.replace_feature(self.bn2(out.features))
 
         identity = x
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        out.features += identity.features
-        out.features = F.relu(out.features)
+        out = out.replace_feature(out.features + identity.features)
+        out = out.replace_feature(F.relu(out.features))
 
         return out
 
@@ -127,7 +127,7 @@ class SparseResNetFHD(nn.Module):
         batch_size = voxelization_result['batch_size']
 
         # extend 1 on z dimension
-        shape = (shape[0] + 1, shape[1], shape[2])
+        shape = [shape[0] + 1, shape[1], shape[2]]
 
         sp_in = spconv.SparseConvTensor(voxels, coords, shape, batch_size)
 
