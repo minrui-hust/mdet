@@ -60,7 +60,7 @@ class WaymoDet3dDataset(MDet3dDataset):
     def load_anno(self, sample, info):
         anno = io.load(info['anno_path'])
 
-        boxes = np.empty((0, 7), dtype=np.float32)
+        boxes = np.empty((0, 8), dtype=np.float32)
         types = np.empty((0,), dtype=np.int32)
         num_points = np.empty((0,), dtype=np.int32)
         box_list, type_list, num_points_list = [], [], []
