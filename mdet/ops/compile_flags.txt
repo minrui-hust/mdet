@@ -1,6 +1,6 @@
 -std=c++14
 -pthread 
--B /home/mr/miniconda3/envs/centerpoint/compiler_compat 
+-B /home/mr/miniconda3/envs/py38/compiler_compat 
 -Wl,--sysroot=/ 
 -Wsign-compare 
 -DNDEBUG 
@@ -10,12 +10,12 @@
 -Wall 
 -Wstrict-prototypes 
 -fPIC 
--I/home/mr/miniconda3/envs/centerpoint/lib/python3.7/site-packages/torch/include 
--I/home/mr/miniconda3/envs/centerpoint/lib/python3.7/site-packages/torch/include/torch/csrc/api/include 
--I/home/mr/miniconda3/envs/centerpoint/lib/python3.7/site-packages/torch/include/TH 
--I/home/mr/miniconda3/envs/centerpoint/lib/python3.7/site-packages/torch/include/THC 
--I/usr/local/cuda-11.1/include 
--I/home/mr/miniconda3/envs/centerpoint/include/python3.7m
+-I/home/mr/miniconda3/envs/mdet/lib/python3.8/site-packages/torch/include 
+-I/home/mr/miniconda3/envs/mdet/lib/python3.8/site-packages/torch/include/torch/csrc/api/include 
+-I/home/mr/miniconda3/envs/mdet/lib/python3.8/site-packages/torch/include/TH 
+-I/home/mr/miniconda3/envs/mdet/lib/python3.8/site-packages/torch/include/THC 
+-I/usr/local/cuda-11.3/include 
+-I/home/mr/miniconda3/envs/mdet/include/python3.8
 -DTORCH_API_INCLUDE_EXTENSION_H
 -DPYBIND11_STDLIB="_libstdcpp"
 -DPYBIND11_BUILD_ABI="_cxxabi1011"

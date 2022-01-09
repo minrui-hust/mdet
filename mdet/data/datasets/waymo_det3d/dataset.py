@@ -67,9 +67,11 @@ class WaymoDet3dDataset(MDet3dDataset):
         for object in anno['objects']:
             raw_type = object['type']
             if raw_type in self.type_raw_to_task:
-                box = object['box']
-                box = np.concatenate(
-                    [box[:6], np.cos(box[6:]), np.sin(box[6:])])
+                raw_box = object['box']
+                box_center = raw_box[:3]
+                box_extend = raw_box[3:6] / 2
+                box_rotation = np.concatenate([np.cos(raw_box[[6]]), np.sin(raw_box[[6]])])
+                box = np.concatenate( [box_center, box_extend, box_rotation] )
                 box_list.append(box)
                 type_list.append(self.type_raw_to_task[raw_type])
                 num_points_list.append(object['num_points'])

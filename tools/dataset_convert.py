@@ -1,5 +1,5 @@
 import argparse
-import mdet.data.datasets.waymo.converter as waymo_converter
+import mdet.data.datasets.waymo_det3d.converter as waymo_converter
 
 
 def parse_args():

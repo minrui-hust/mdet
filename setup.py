@@ -136,7 +136,9 @@ if __name__ == '__main__':
                 module='mdet.ops.iou3d',
                 sources=[
                     'src/iou3d.cpp',
-                    'src/iou3d_kernel.cu',
+                    'src/iou3d_cpu.cpp',
+                    'src/iou3d_cuda.cu',
+                    'src/nms_bev_kernel.cu',
                 ]),
         ],
         cmdclass={'build_ext': BuildExtension},

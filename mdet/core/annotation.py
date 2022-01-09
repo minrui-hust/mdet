@@ -5,7 +5,9 @@ class Annotation3d(object):
 
         r'''
         shape: N x 8, float32
-        encode: [center_x, center_y, center_z, size_x, size_y, size_z, cos_alpha, sin_alpha]
+        encode: [center_x, center_y, center_z, extend_x, extend_y, extend_z, cos_alpha, sin_alpha]
+        center: box center in global frame
+        extend: half length and width
         rot: the box x axis relative to global x axis in counter-clock wise direction
         '''
         self.boxes = boxes

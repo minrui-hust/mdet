@@ -79,7 +79,7 @@ class Visualizer(object):
 
         for i, (box, color) in enumerate(zip(boxes, box_color)):
             center = box[0:3]
-            dim = box[3:6]
+            dim = box[3:6] * 2
             rotm = o3d.geometry.get_rotation_matrix_from_xyz(
                 np.array([0, 0, math.atan2(box[7], box[6])]))
             o3d_box = o3d.geometry.OrientedBoundingBox(center, rotm, dim)

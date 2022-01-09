@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from mdet.core.annotation import Annotation3d
 import mdet.model.loss.loss as loss
-from mdet.ops.iou3d import nms
+from mdet.ops.iou3d import nms_bev
 from mdet.utils.factory import FI
 from mdet.utils.gaussian import draw_gaussian, gaussian_radius
 
@@ -79,7 +79,7 @@ class CenterPointCodec(BaseCodec):
         height = boxes[:, [2]]
 
         # size, in log format
-        size = np.log(boxes[:, 3:6])
+        size = np.log(boxes[:, 3:6]*2)
 
         # heading, in complex number format
         heading = boxes[:, 6:]
@@ -142,31 +142,23 @@ class CenterPointCodec(BaseCodec):
         topk_label = label.gather(1, topk_indices)  # [B, K]
 
         # decode boxes into standard format
-        topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 7]
+        topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 8]
 
-        # box for nms, xyxyr
-        nms_boxes = torch.zeros_like(topk_boxes[..., :5])
-        half_w = topk_boxes[..., 3] / 2
-        half_h = topk_boxes[..., 4] / 2
-        nms_boxes[..., 0] = topk_boxes[..., 0] - half_w
-        nms_boxes[..., 1] = topk_boxes[..., 1] - half_h
-        nms_boxes[..., 2] = topk_boxes[..., 0] + half_w
-        nms_boxes[..., 3] = topk_boxes[..., 1] + half_h
-        #  nms_boxes[..., 4] = -topk_boxes[..., 6]
-        nms_boxes[..., 4] = -torch.atan2(topk_boxes[..., 7], topk_boxes[..., 6])
+        # box for nms (bird eye view)
+        nms_boxes = topk_boxes[..., [0,1,3,4,6,7]]
 
         # do nms for each sample
         pred_list = []
         batch_size = 1 if batch is None else batch['_info_']['size']
         for i in range(batch_size):
-            keep_indices, valid_num = nms(
+            keep_indices, valid_num = nms_bev(
                 nms_boxes[i],
                 topk_score[i],
-                self.decode_cfg['nms_cfg']['post_num'],
                 self.decode_cfg['nms_cfg']['overlap_thresh'],
-            )
+                self.decode_cfg['nms_cfg']['post_num'],
+                )
             if not infer:
-                valid_indices = keep_indices[:valid_num]
+                valid_indices = keep_indices[:valid_num].long()
                 det_box = topk_boxes[i][valid_indices]
                 det_label = topk_label[i][valid_indices]
                 det_score = topk_score[i][valid_indices]
@@ -339,7 +331,7 @@ class CenterPointCodec(BaseCodec):
 
         decoded_box_z = boxes[..., [2]]
 
-        decoded_box_size = torch.exp(boxes[..., 3:6])
+        decoded_box_size = torch.exp(boxes[..., 3:6]) / 2
 
         decoded_box_heading = boxes[..., 6:]
 

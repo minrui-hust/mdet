@@ -25,7 +25,6 @@
        i += blockDim.x * gridDim.x)
 
 namespace {
-
 template <typename T_int> inline T_int CeilDiv(T_int a, T_int b) {
   return (a + b - 1) / b;
 }

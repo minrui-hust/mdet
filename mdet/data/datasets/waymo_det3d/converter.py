@@ -34,7 +34,7 @@ def convert(raw_root_path, out_root_path, split):
     os.makedirs(pcd_path, exist_ok=True)
     os.makedirs(anno_path, exist_ok=True)
 
-    with mp.Pool(mp.cpu_count()) as p:
+    with mp.Pool(int(mp.cpu_count()/2)) as p:
         p.map(partial(convert_one, pcd_path=pcd_path, anno_path=anno_path),
               record_path_list)
 
