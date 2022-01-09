@@ -2,7 +2,7 @@
 #include <ATen/TensorUtils.h>
 #include <torch/extension.h>
 
-namespace {
+namespace voxelization {
 
 constexpr size_t NDim = 3;
 
@@ -99,10 +99,6 @@ void voxelize_kernel(const torch::TensorAccessor<T, 2> points,
     ++voxel_point_num;
   }
 }
-
-} // namespace
-
-namespace voxelization {
 
 // clang-format off
 void voxelize_cpu(const at::Tensor &points,

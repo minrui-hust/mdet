@@ -1,12 +1,6 @@
 #pragma once
+#include "voxelization_kernel.h"
 #include <torch/extension.h>
-
-typedef enum {
-  NONE = 0,
-  MEAN = 1,
-  FIRST = 2,
-  NEAREST = 3,
-} reduce_t;
 
 namespace voxelization {
 

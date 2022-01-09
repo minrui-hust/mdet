@@ -1,4 +1,5 @@
 #pragma once
+#include <cuda_runtime.h> // this is required for header to be used in host cpp code
 
 namespace nms_bev{
 

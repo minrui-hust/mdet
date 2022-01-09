@@ -130,6 +130,7 @@ if __name__ == '__main__':
                     'src/voxelization.cpp',
                     'src/voxelization_cpu.cpp',
                     'src/voxelization_cuda.cu',
+                    'src/voxelization_kernel.cu',
                 ]),
             make_cuda_ext(
                 name='iou3d',
