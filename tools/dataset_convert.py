@@ -1,5 +1,6 @@
 import argparse
-import mdet.data.datasets.waymo_det3d.converter as waymo_converter
+import mdet.data.datasets
+from mdet.utils.factory import FI
 
 
 def parse_args():
@@ -16,12 +17,12 @@ def parse_args():
 
 def main():
     args = parse_args()
-    converter_name = f'{args.dataset}_converter'
-    converter = globals()[converter_name]
+    converter_name = f'{args.dataset}Converter'
+    converter = FI.create(dict(type=converter_name))
 
     for split in args.splits:
         print(f'Processing split: {split}')
-        converter.convert(args.root_path, args.out_path, split)
+        converter(args.root_path, args.out_path, split)
 
 
 if __name__ == '__main__':

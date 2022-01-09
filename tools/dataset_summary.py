@@ -1,5 +1,6 @@
 import argparse
-import mdet.data.datasets.waymo.summary as waymo_summary
+import mdet.data.datasets
+from mdet.utils.factory import FI
 
 
 def parse_args():
@@ -15,12 +16,12 @@ def parse_args():
 
 def main():
     args = parse_args()
-    summary_name = f'{args.dataset}_summary'
-    summary = globals()[summary_name]
+    summary_name = f'{args.dataset}Summary'
+    summary = FI.create(dict(type=summary_name))
 
     for split in args.splits:
         print(f'Processing split: {split}')
-        summary.summary(args.root_path, split)
+        summary(args.root_path, split)
 
 
 if __name__ == '__main__':

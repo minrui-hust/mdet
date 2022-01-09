@@ -1,25 +1,31 @@
 """Tool to convert Waymo Open Dataset to seperate files.
 """
 
+from functools import partial
+import multiprocessing as mp
 import os
 import os.path as osp
-import multiprocessing as mp
-from functools import partial
+import zlib
 
-import tensorflow.compat.v2 as tf
-
+import numpy as np
+from tqdm import tqdm
 from waymo_open_dataset import dataset_pb2
 from waymo_open_dataset import label_pb2
 from waymo_open_dataset.utils import range_image_utils
 from waymo_open_dataset.utils import transform_utils
 
-from tqdm import tqdm
-
-import zlib
-import numpy as np
-
+from mdet.utils.factory import FI
 import mdet.utils.io as io
+import tensorflow.compat.v2 as tf
 
+
+@FI.register
+class WaymoDet3dConverter(object):
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, raw_root_path, out_root_path, split):
+        convert(raw_root_path, out_root_path, split)
 
 def convert(raw_root_path, out_root_path, split):
     record_path = osp.join(raw_root_path, split)

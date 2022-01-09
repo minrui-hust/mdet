@@ -1,6 +1,16 @@
 import os
 from tqdm import tqdm
 import mdet.utils.io as io
+from mdet.utils.factory import FI
+
+
+@FI.register
+class WaymoDet3dSummary(object):
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, root_path, split, nsweep=5):
+        summary(root_path, split, nsweep)
 
 
 def summary(root_path, split, nsweep=5):
