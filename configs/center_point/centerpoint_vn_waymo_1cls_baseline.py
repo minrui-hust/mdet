@@ -126,14 +126,14 @@ dataloader_train = dict(
     ),
 )
 
-dataloader_val = deepcopy(dataloader_train)
-dataloader_val['shuffle'] = False
-dataloader_val['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
+dataloader_eval = deepcopy(dataloader_train)
+dataloader_eval['shuffle'] = False
+dataloader_eval['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
 #  dataloader_val['dataset']['info_path'] = '/data/tmp/waymo/training_info.pkl'
 
-dataloader_test = deepcopy(dataloader_train)
-dataloader_test['shuffle'] = False
-dataloader_test['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
+dataloader_infer = deepcopy(dataloader_train)
+dataloader_infer['shuffle'] = False
+dataloader_infer['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
 
 
 # collect config
@@ -151,8 +151,8 @@ codec = dict(
 
 data = dict(
     train=dataloader_train,
-    val=dataloader_val,
-    test=dataloader_test
+    eval=dataloader_eval,
+    infer=dataloader_infer,
 )
 
 
@@ -179,6 +179,6 @@ runtime = dict(
             #  dict(type='CSVLogger',),
         ],
     ),
-    val=dict(output_folder=None, evaluate=False),
+    eval=dict(output_folder=None, evaluate=False),
     test=dict(),
 )
