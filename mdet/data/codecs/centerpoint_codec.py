@@ -157,8 +157,9 @@ class CenterPointCodec(BaseCodec):
                 self.decode_cfg['nms_cfg']['overlap_thresh'],
                 self.decode_cfg['nms_cfg']['post_num'],
                 )
+            keep_indices = keep_indices.long()
             if not infer:
-                valid_indices = keep_indices[:valid_num].long()
+                valid_indices = keep_indices[:valid_num]
                 det_box = topk_boxes[i][valid_indices]
                 det_label = topk_label[i][valid_indices]
                 det_score = topk_score[i][valid_indices]

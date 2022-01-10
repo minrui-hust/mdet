@@ -145,6 +145,11 @@ class PlWrapper(pl.LightningModule):
         dataloader_cfg.pop('dataset')
         return DataLoader(self.eval_dataset, collate_fn=self.eval_collater, **dataloader_cfg)
 
+    def infer_dataloader(self):
+        dataloader_cfg = self.config['data']['infer'].copy()
+        dataloader_cfg.pop('dataset')
+        return DataLoader(self.infer_dataset, collate_fn=self.infer_collater, **dataloader_cfg)
+
     def configure_optimizers(self):
         # optimizer
         optim_cfg = self.config['fit']['optimizer'].copy()
@@ -195,7 +200,7 @@ class PlWrapper(pl.LightningModule):
         self.track_model(self.train_model, self.infer_model)
 
         # data
-        batch = iter(self.test_dataloader()).next().select(
+        batch = iter(self.infer_dataloader()).next().select(
             ['input']).to('cuda')
 
         input, input_name, output_name, dynamic_axes = self.infer_codec.get_export_info(

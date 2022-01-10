@@ -25,9 +25,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train model')
     parser.add_argument('config', help='training config file')
     parser.add_argument('--ckpt', help='the checkpoint file to resume from')
-    parser.add_argument('--output', type=str, help='the checkpoint file to resume from')
+    parser.add_argument('--output', type=str, help='the output onnx model path')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
+    parser.add_argument('--relax', default=False, action='store_true',
+                        help='wether load checkpoint strictly')
     return parser.parse_args()
 
 
@@ -36,20 +38,20 @@ def main(args):
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
 
-    # hack test config for export
+    # hack infer config for export
     config = ConfigLoader.load(args.config)
-    config['data']['test']['shuffle'] = False
-    config['data']['test']['pin_memory'] = False
-    config['data']['test']['num_workers'] = 1
-    config['data']['test']['batch_size'] = 1
-    config['codec']['eval'] = config['codec']['infer']
+    config['data']['infer']['shuffle'] = False
+    config['data']['infer']['pin_memory'] = False
+    config['data']['infer']['num_workers'] = 1
+    config['data']['infer']['batch_size'] = 1
 
     # create lightning module
     if args.ckpt:
-        pl_module = PlWrapper.load_from_checkpoint(config=config,checkpoint_path=args.ckpt)
+        pl_module = PlWrapper.load_from_checkpoint(config=config, checkpoint_path=args.ckpt, strict=(not args.relax))
     else:
         pl_module = PlWrapper(config=config)
 
+    # setup output folder
     if not args.output:
         output_folder = ""
         if args.ckpt is not None:
