@@ -26,8 +26,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train model')
     parser.add_argument('config', help='training config file')
     parser.add_argument('--ckpt', help='the checkpoint file to resume from')
-    parser.add_argument('--split', type=str, default='val',
-                        choices=['train', 'val'],  help='split to evaluate')
+    parser.add_argument('--split', type=str, default='eval',
+                        choices=['train', 'eval'],  help='split to evaluate')
     parser.add_argument('--evaluate', action='store_true',
                         help='wether do evaluation')
     parser.add_argument(
@@ -50,6 +50,8 @@ def parse_args():
                         help='overfit batch num, used for debug')
     parser.add_argument('--profile', default=False, action='store_true',
                         help='wether don profile, use together with overfit')
+    parser.add_argument('--relax', default=False, action='store_true',
+                        help='wether load checkpoint strictly')
     return parser.parse_args()
 
 
@@ -61,8 +63,8 @@ def main(args):
     # hack config for evaluation
     config = ConfigLoader.load(args.config)
     config['data'][args.split]['shuffle'] = False
-    config['runtime']['val']['log_loss'] = False
-    config['runtime']['val']['evaluate'] = args.evaluate
+    config['runtime']['eval']['log_loss'] = False
+    config['runtime']['eval']['evaluate'] = args.evaluate
 
     interest_set = set()
     epoch_interest_set = set()
@@ -85,7 +87,7 @@ def main(args):
             module.eval_codec.plot(sample, **args.show_output_args)
 
         if args.show_pred:
-            module.val_dataset.plot(sample, **args.show_pred_args)
+            module.eval_dataset.plot(sample, **args.show_pred_args)
 
     def epoch_hook(sample_list, module):
         if args.store_output is not None:
@@ -102,17 +104,20 @@ def main(args):
                 io.dump(sample['pred'],
                         f'{args.store_output}/{sample_name}.pkl')
 
-    config['runtime']['val']['interest_set'] = interest_set
-    config['runtime']['val']['epoch_interest_set'] = epoch_interest_set
-    config['runtime']['val']['step_hook'] = step_hook
-    config['runtime']['val']['epoch_hook'] = epoch_hook
+    config['runtime']['eval']['interest_set'] = interest_set
+    config['runtime']['eval']['epoch_interest_set'] = epoch_interest_set
+    config['runtime']['eval']['step_hook'] = step_hook
+    config['runtime']['eval']['epoch_hook'] = epoch_hook
 
     # NOTE: hack for none cleanly exits
     if args.show_output or args.show_pred:
         config['data'][args.split]['num_workers'] = 0
 
     # create lightning module
-    pl_module = PlWrapper(config)
+    if args.ckpt:
+        pl_module = PlWrapper.load_from_checkpoint(config=config, checkpoint_path=args.ckpt, strict=(not args.relax))
+    else:
+        pl_module = PlWrapper(config=config)
 
     prof = PyTorchProfiler(
         filename='prof'
@@ -144,9 +149,8 @@ def main(args):
         precision=16 if args.amp else 32,
     )
 
-    # do validation
+    # do evaluation
     trainer.validate(pl_module,
-                     ckpt_path=args.ckpt,
                      dataloaders=getattr(
                          pl_module, f'{args.split}_dataloader')()
                      )

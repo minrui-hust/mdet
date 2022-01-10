@@ -17,46 +17,49 @@ class PlWrapper(pl.LightningModule):
 
         self.config = config
 
-        # train
+        # model
         self.train_model = FI.create(config['model']['train'])
-        self.train_codec = FI.create(config['codec']['train'])
-        self.train_collater = self.train_codec.get_collater()
         self.train_model.set_train()
 
-        # eval(val, test)
-        self.eval_model = FI.create(config['model']['eval'])
-        self.eval_codec = FI.create(config['codec']['eval'])
-        self.eval_collater = self.eval_codec.get_collater()
-        self.eval_model.set_eval()
+        self.util_models = {} # use normal dict to avoid register parameters
+        self.util_models['eval_model'] = FI.create(config['model']['eval'])
+        self.util_models['eval_model'].set_eval()
 
-        # infer(export for depoly)
-        self.infer_model = FI.create(config['model']['infer'])
+        self.util_models['infer_model']= FI.create(config['model']['infer'])
+        self.util_models['infer_model'].set_infer()
+
+        # codec
+        self.train_codec = FI.create(config['codec']['train'])
+        self.eval_codec  = FI.create(config['codec']['eval'])
         self.infer_codec = FI.create(config['codec']['infer'])
-        self.infer_collater = self.infer_codec.get_collater()
-        self.infer_model.set_infer()
 
         # dataset
         self.train_dataset = FI.create(config['data']['train']['dataset'])
-        self.val_dataset = FI.create(config['data']['val']['dataset'])
-        self.test_dataset = FI.create(config['data']['test']['dataset'])
-
-        # attach codec to dataset
         self.train_dataset.codec = self.train_codec
-        self.val_dataset.codec = self.eval_codec
-        self.test_dataset.codec = self.eval_codec
 
-        # config for validation
-        self.val_log_loss = config['runtime']['val'].get('log_loss', True)
-        self.val_evaluate = config['runtime']['val'].get('evaluate', True)
-        self.val_interest_set = config['runtime']['val'].get(
+        self.eval_dataset = FI.create(config['data']['eval']['dataset'])
+        self.eval_dataset.codec = self.eval_codec
+
+        self.infer_dataset = FI.create(config['data']['infer']['dataset'])
+        self.infer_dataset.codec = self.infer_codec
+
+        # collater
+        self.train_collater = self.train_codec.get_collater()
+        self.eval_collater = self.eval_codec.get_collater()
+        self.infer_collater = self.infer_codec.get_collater()
+
+        # config for evaluation, this is default for training, may be override by config
+        self.eval_log_loss = config['runtime']['eval'].get('log_loss', True)
+        self.eval_evaluate = config['runtime']['eval'].get('evaluate', True)
+        self.eval_interest_set = config['runtime']['eval'].get(
             'interest_set', set())
-        self.val_epoch_interest_set = config['runtime']['val'].get(
+        self.eval_epoch_interest_set = config['runtime']['eval'].get(
             'epoch_interest_set', set())
-        self.val_step_hook = config['runtime']['val'].get('step_hook', None)
-        self.val_epoch_hook = config['runtime']['val'].get('epoch_hook', None)
-        if self.val_evaluate:
-            self.val_interest_set |= {'anno', 'pred'}
-            self.val_epoch_interest_set |= {'anno', 'pred'}
+        self.eval_step_hook = config['runtime']['eval'].get('step_hook', None)
+        self.eval_epoch_hook = config['runtime']['eval'].get('epoch_hook', None)
+        if self.eval_evaluate:
+            self.eval_interest_set |= {'anno', 'pred'}
+            self.eval_epoch_interest_set |= {'anno', 'pred'}
 
     def forward(self, *input):
         # forward is used for export
@@ -83,15 +86,15 @@ class PlWrapper(pl.LightningModule):
         output = self.eval_model(batch)
 
         # check if should log loss
-        if self.val_log_loss:
+        if self.eval_log_loss:
             loss_dict = self.eval_codec.loss(output, batch)
             for name, value in loss_dict.items():
-                self.log(f'val/{name}', value,
+                self.log(f'eval/{name}', value,
                          batch_size=batch['_info_']['size'])
 
         # construct batch interested
         batch_interest = Sample(_info_=batch['_info_'])
-        for key in self.val_interest_set:
+        for key in self.eval_interest_set:
             if key == 'pred':
                 batch_interest[key] = self.eval_codec.decode(output, batch)
             elif key == 'output':
@@ -106,113 +109,31 @@ class PlWrapper(pl.LightningModule):
         sample_list = self.eval_collater.decollate(batch_interest)
 
         # do callback on samples
-        if self.val_step_hook is not None and sample_list:
+        if self.eval_step_hook is not None and sample_list:
             for sample in sample_list:
-                self.val_step_hook(sample, self)
+                self.eval_step_hook(sample, self)
 
         # output for epoch end
-        val_step_out = []
-        if self.val_epoch_interest_set and sample_list:
+        eval_step_out = []
+        if self.eval_epoch_interest_set and sample_list:
             for sample in sample_list:
-                val_step_out.append(sample.select(self.val_epoch_interest_set))
+                eval_step_out.append(sample.select(self.eval_epoch_interest_set))
 
-        return val_step_out
+        return eval_step_out
 
     def validation_epoch_end(self, step_output_list):
         # collate epoch_output
         sample_list = itertools.chain.from_iterable(step_output_list)
 
         # epoch callback
-        if self.val_epoch_hook is not None:
-            self.val_epoch_hook(sample_list, self)
+        if self.eval_epoch_hook is not None:
+            self.eval_epoch_hook(sample_list, self)
 
         # format and evaluation
-        if self.val_evaluate:
-            pred_path, anno_path = self.val_dataset.format(sample_list)
-            metric = self.val_dataset.evaluate(pred_path, anno_path)
+        if self.eval_evaluate:
+            pred_path, anno_path = self.eval_dataset.format(sample_list)
+            metric = self.eval_dataset.evaluate(pred_path, anno_path)
             self.log_dict(metric)
-
-    def test_step(self, batch, batch_idx):
-        output = self.eval_model(batch)
-
-        # merge output into batch and decollate into sample_list
-        batch['output'] = output
-        merged_sample_list = self.eval_collater.decollate(batch)
-
-        # decode samples into standard format
-        standard_sample_list = []
-        encoded_sample_list = []
-        for merged_sample in merged_sample_list:
-            standard_sample = self.eval_codec.decode(
-                Sample(
-                    output=merged_sample['output'],
-                    data=merged_sample['data'],
-                    meta=merged_sample['meta'],
-                )
-            )
-            standard_sample_list.append(standard_sample)
-            # TODO: online plot
-
-            encoded_sample = Sample(
-                output=merged_sample['output'],
-                input=merged_sample['input'],
-                gt=merged_sample['gt'],
-                meta=merged_sample['meta'],
-            )
-            encoded_sample_list.append(encoded_sample)
-            # TODO: online plot
-
-        test_output = dict(
-            pred=[sample['pred'] for sample in standard_sample_list],
-            meta=[sample['meta'] for sample in standard_sample_list],
-            output=[sample['output'] for sample in encoded_sample_list],
-        )
-        return test_output
-
-    def test_epoch_end(self, epoch_output):
-        # collate epoch_output
-        epoch_output = self.collate_output(epoch_output)
-
-        # save output if required
-        self.save_output(
-            epoch_output,
-            self.config['runtime']['test'].get('prediction_folder', None),
-            self.config['runtime']['test'].get('raw_output_folder', None),
-        )
-
-        # format according to different dataset
-        pred_path, _ = self.test_dataset.format(
-            epoch_output,
-            self.config['runtime']['test'].get('formated_path', None),
-            None,
-        )
-
-        print(f'Formatted output is saved to "{pred_path}"')
-
-    def collate_output(self, epoch_output):
-        collated = {key: [] for key in epoch_output[0].keys()}
-        for batch_output in epoch_output:
-            for key in collated.keys():
-                collated[key].extend(batch_output[key])
-        return collated
-
-    def save_output(self, output, prediction_folder, raw_output_folder):
-        # store output if output folder has been set
-        if prediction_folder is not None:
-            os.makedirs(prediction_folder, exist_ok=True)
-            print(f'Saving prediction to \'{prediction_folder}\'')
-            for pred, meta in zip(output['pred'], output['meta']):
-                sample_name = meta['sample_name']
-                fname = f'{prediction_folder}/{sample_name}.pkl'
-                io.dump(pred, fname)
-
-        if raw_output_folder is not None:
-            os.makedirs(raw_output_folder, exist_ok=True)
-            print(f'Saving raw output to \'{raw_output_folder}\'')
-            for raw_output, meta in zip(output['output'], output['meta']):
-                sample_name = meta['sample_name']
-                fname = f'{raw_output_folder}/{sample_name}.pkl'
-                io.dump(raw_output, fname)
 
     def train_dataloader(self):
         dataloader_cfg = self.config['data']['train'].copy()
@@ -220,14 +141,9 @@ class PlWrapper(pl.LightningModule):
         return DataLoader(self.train_dataset, collate_fn=self.train_collater, **dataloader_cfg)
 
     def val_dataloader(self):
-        dataloader_cfg = self.config['data']['val'].copy()
+        dataloader_cfg = self.config['data']['eval'].copy()
         dataloader_cfg.pop('dataset')
-        return DataLoader(self.val_dataset, collate_fn=self.eval_collater, **dataloader_cfg)
-
-    def test_dataloader(self):
-        dataloader_cfg = self.config['data']['test'].copy()
-        dataloader_cfg.pop('dataset')
-        return DataLoader(self.test_dataset, collate_fn=self.eval_collater, **dataloader_cfg)
+        return DataLoader(self.eval_dataset, collate_fn=self.eval_collater, **dataloader_cfg)
 
     def configure_optimizers(self):
         # optimizer
@@ -250,6 +166,17 @@ class PlWrapper(pl.LightningModule):
 
         return [optimizer], [scheduler]
 
+    def on_validation_start(self):
+        self.track_model(self.train_model, self.eval_model)
+
+    @property
+    def eval_model(self):
+        return self.util_models['eval_model']
+
+    @property
+    def infer_model(self):
+        return self.util_models['infer_model']
+
     def track_model(self, m_target, m_follow, name_str=''):
         # track parameters
         m_follow._parameters = m_target._parameters
@@ -261,15 +188,6 @@ class PlWrapper(pl.LightningModule):
         for name in m_follow._modules:
             self.track_model(
                 m_target._modules[name], m_follow._modules[name], f'{name_str}.{name}')
-
-    def on_train_start(self):
-        self.track_model(self.train_model, self.eval_model)
-
-    def on_validation_start(self):
-        self.track_model(self.train_model, self.eval_model)
-
-    def on_test_start(self):
-        self.track_model(self.train_model, self.eval_model)
 
     def export(self, output_file='tmp.onnx', **kwargs):
         # model
