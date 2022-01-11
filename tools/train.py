@@ -35,6 +35,8 @@ def parse_args():
                         help='overfit batch num, used for debug')
     parser.add_argument('--profile', default=False, action='store_true',
                         help='wether don profile, use together with overfit')
+    parser.add_argument('--lr_scale', type=float,
+                        help='when batch size varies, we need to rescale learning rate')
     return parser.parse_args()
 
 
@@ -43,8 +45,14 @@ def main(args):
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
 
-    # lightning module
+    # load config
     config = ConfigLoader.load(args.config)
+
+    # config override
+    if args.lr_scale is not None:
+        config['lr_scale'] = args.lr_scale
+
+    # lightning module
     pl_module = PlWrapper(config)
 
     max_epochs = config['fit']['max_epochs']
@@ -91,6 +99,13 @@ def main(args):
             record_shapes=True,
         )
 
+    # grad clip
+    grad_clip_val = None
+    grad_clip_alg = None
+    if 'grad_clip' in config['fit']:
+        grad_clip_val = config['fit']['grad_clip']['value']
+        grad_clip_alg = config['fit']['grad_clip']['type']
+
     # setup trainner
     trainer = pl.Trainer(
         num_sanity_val_steps=0,
@@ -102,6 +117,8 @@ def main(args):
         strategy='ddp' if len(args.gpu) > 1 else None,
         overfit_batches=args.overfit,
         profiler=profiler,
+        gradient_clip_algorithm=grad_clip_alg,
+        gradient_clip_val=grad_clip_val,
         precision=16 if args.amp else 32,
     )
 

@@ -3,17 +3,18 @@ from copy import deepcopy
 
 
 # global config
-types = [('Vehicle', [1])]
+types = [('Vehicle', [1]), ('Pedestrian', [2])]
 
-point_range = [-75.52, -75.52, -2, 75.52, 75.52, 4.0]
+point_range= [-74.88, -74.88, -2, 74.88, 74.88, 4.0]
 voxel_size = [0.32, 0.32, 6.0]
-voxel_reso = [472, 472, 1]
+voxel_reso = [468, 468, 1]
 
-out_grid_size = [0.64, 0.64]
-out_grid_reso = [236, 236]
+out_grid_size = [0.32, 0.32]
+out_grid_reso = [468, 468]
 
-batch_size = 2
-max_epochs = 96
+batch_size = 1
+max_epochs = 36
+lr_scale = 1.0
 
 # model config
 model_train = dict(
@@ -23,7 +24,7 @@ model_train = dict(
         point_range=point_range,
         voxel_size=voxel_size,
         voxel_reso=voxel_reso,
-        max_points=32,
+        max_points=20,
         max_voxels=32000,
     ),
     backbone3d=dict(
@@ -38,12 +39,12 @@ model_train = dict(
         voxel_reso=voxel_reso,
         voxel_size=voxel_size,
         point_range=point_range,
-        pfn_channels=[64, ],
+        pfn_channels=[64, 64, ],
     ),
     backbone2d=dict(
         type='SECOND',
         layer_nums=[3, 5, 5],
-        layer_strides=[2, 2, 2],
+        layer_strides=[1, 2, 2],
         out_channels=[64, 128, 256],
         in_channels=64,
     ),
@@ -69,6 +70,7 @@ model_train = dict(
 )
 
 model_eval = deepcopy(model_train)
+model_eval['voxelization']['max_voxels'] = 60000
 
 model_infer = deepcopy(model_train)
 
@@ -87,9 +89,9 @@ codec_train = dict(
     ),
     decode_cfg=dict(
         nms_cfg=dict(
-            pre_num=1024,
-            post_num=256,
-            overlap_thresh=0.01,
+            pre_num=4096,
+            post_num=500,
+            overlap_thresh=0.7,
         ),
     ),
     loss_cfg=dict(
@@ -126,8 +128,10 @@ dataloader_train = dict(
             types=types,
         ),
         transforms=[
-            dict(type='RangeFilter', point_range=point_range),
             dict(type='PcdIntensityNormlizer'),
+            dict(type='PcdShuffler'),
+            dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
+            dict(type='PcdRangeFilter', point_range=point_range),
         ],
     ),
 )
@@ -135,7 +139,6 @@ dataloader_train = dict(
 dataloader_eval = deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
-#  dataloader_val['dataset']['info_path'] = '/data/tmp/waymo/training_info.pkl'
 
 dataloader_infer = deepcopy(dataloader_train)
 dataloader_infer['shuffle'] = False
@@ -164,17 +167,19 @@ fit = dict(
     max_epochs=max_epochs,
     optimizer=dict(
         type='Adam',
-        lr=3e-4 / 2,
+        weight_decay=0.01,
         betas=(0.9, 0.99),
+        lr=0.003 * lr_scale,
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=3e-4 / 2,
+        max_lr=0.003 * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
         pct_start=0.4,
     ),
+    grad_clip=dict(type='norm', value=35),
 )
 
 runtime = dict(
@@ -185,5 +190,5 @@ runtime = dict(
         ],
     ),
     eval=dict(output_folder=None, evaluate=False),
-    test=dict(),
+    infer=dict(),
 )
