@@ -4,6 +4,7 @@ import os.path as osp
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.callbacks import LearningRateMonitor
 import pytorch_lightning.loggers as loggers
 from pytorch_lightning.profiler import PyTorchProfiler
 import torch
@@ -83,10 +84,15 @@ def main(args):
 
     # callbacks
     callbacks = []
+
     # make checkpoint path identical with log
     checkpoint_folder = osp.join(
         args.work_dir, config_name, experiment_version)
     callbacks.append(ModelCheckpoint(dirpath=checkpoint_folder))
+
+    # learning rate monitor
+    callbacks.append(LearningRateMonitor(
+        logging_interval='step', log_momentum=True))
 
     # profiler
     profiler = None
