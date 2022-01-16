@@ -16,6 +16,7 @@ batch_size = 2
 max_epochs = 36
 lr_scale = 1.0
 dataset_root = '/data/tmp/waymo'
+point_dim = 4
 
 # model config
 model_train = dict(
@@ -32,7 +33,7 @@ model_train = dict(
         type='PillarFeatureNet',
         pillar_feat=[
             ('position', 3),
-            ('attribute', 2),
+            ('attribute', point_dim-3),
             ('center_offset', 2),
             ('mean_offset', 3),
             #  ('distance', 1),
@@ -119,8 +120,8 @@ db_sampler = dict(
     info_path=f'{dataset_root}/training_info_gt.pkl',
     sample_groups={'Pedestrian': 10, 'Cyclist': 10, 'Vehicle': 15},
     labels=types,
-    pcd_loader=dict(type='WaymoNSweepLoader', load_dim=5, nsweep=1),
-    filter=dict(type='FilterByNumpoints', min_num_points=10), # TODO
+    pcd_loader=dict(type='WaymoNSweepLoader', load_dim=point_dim, nsweep=1),
+    filter=dict(type='FilterByNumpoints', min_num_points=10),  # TODO
 )
 
 dataloader_train = dict(
@@ -131,11 +132,12 @@ dataloader_train = dict(
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path=f'{dataset_root}/training_info.pkl',
-        load_opt=dict(load_dim=5, nsweep=1, types=types,),
+        load_opt=dict(load_dim=point_dim, nsweep=1, types=types,),
         transforms=[
             dict(type='PcdIntensityNormlizer'),
             dict(type='PcdObjectSampler', db_sampler=db_sampler),
-            dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
+            dict(type='PcdGlobalTransform',
+                 rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
             dict(type='PcdRangeFilter', point_range=point_range),
             dict(type='PcdShuffler'),
         ],
