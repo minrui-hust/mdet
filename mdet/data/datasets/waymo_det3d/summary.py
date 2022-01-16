@@ -180,6 +180,9 @@ def create_gt_database_one_seq(seq_item, root_path, split):
         frame_id = anno['frame_id']
         objects = anno['objects']
 
+        if len(objects) <= 0:
+            continue
+
         objects_box_list = [object['box'] for object in objects]
         objects_box = normlize_boxes(np.stack(objects_box_list, axis=0))
 
