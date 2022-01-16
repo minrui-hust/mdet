@@ -29,7 +29,6 @@ def main(args):
 
     # create dataset
     config = ConfigLoader.load(args.config)
-    config['data'][args.split]['dataset']['codecs'] = None  # no encode is needed
     dataset = FI.create(config['data'][args.split]['dataset'])
 
     pred_folder = args.pred
@@ -42,7 +41,7 @@ def main(args):
             pred = io.load(pred_path)
             sample['pred'] = pred
 
-        dataset.plot(sample, show_gt=args.show_gt, show_pred=True)
+        dataset.plot(sample)
 
 
 if __name__ == '__main__':

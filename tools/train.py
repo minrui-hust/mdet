@@ -38,6 +38,8 @@ def parse_args():
                         help='wether don profile, use together with overfit')
     parser.add_argument('--autoscale_lr', default=False, action='store_true',
                         help='disable auto scale learning rate according to gpu number')
+    parser.add_argument('--dataset_root', type=str,
+                        help='the dataset root folder, this will override config')
     return parser.parse_args()
 
 
@@ -52,6 +54,11 @@ def main(args):
     # config override
     if args.autoscale_lr:
         config['lr_scale'] *= len(args.gpu)
+        print(f'INFO: override lr_scale to {config["lr_scale"]}')
+
+    if args.dataset_root:
+        config['dataset_root'] = args.dataset_root
+        print(f'INFO: override dataset_root to {config["dataset_root"]}')
 
     # lightning module
     pl_module = PlWrapper(config)
