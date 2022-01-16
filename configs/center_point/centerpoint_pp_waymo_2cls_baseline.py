@@ -169,11 +169,11 @@ fit = dict(
         type='Adam',
         weight_decay=0.01,
         betas=(0.9, 0.99),
-        lr=0.003 * lr_scale,
+        lr=0.003 / 16 * batch_size * lr_scale,
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.003 * lr_scale,
+        max_lr=0.003 / 16 * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,

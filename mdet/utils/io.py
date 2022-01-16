@@ -1,5 +1,5 @@
-
 from abc import ABCMeta, abstractmethod
+import gzip
 from pathlib import Path
 import pickle
 
@@ -30,7 +30,6 @@ def _register_handler(handler, file_formats):
 
 
 def register_handler(file_formats, **kwargs):
-
     def wrap(cls):
         _register_handler(cls(**kwargs), file_formats)
         return cls
@@ -39,7 +38,6 @@ def register_handler(file_formats, **kwargs):
 
 
 class BaseFileHandler(metaclass=ABCMeta):
-
     @abstractmethod
     def load_from_fileobj(self, file, **kwargs):
         pass
@@ -53,17 +51,24 @@ class BaseFileHandler(metaclass=ABCMeta):
         pass
 
     def load_from_path(self, filepath, mode='r', **kwargs):
-        with open(filepath, mode) as f:
-            return self.load_from_fileobj(f, **kwargs)
+        if 'compress' in kwargs and kwargs['compress']:
+            with gzip.open(f'{filepath}.gz', mode) as f:
+                return self.load_from_fileobj(f)
+        else:
+            with open(filepath, mode) as f:
+                return self.load_from_fileobj(f)
 
     def dump_to_path(self, obj, filepath, mode='w', **kwargs):
-        with open(filepath, mode) as f:
-            self.dump_to_fileobj(obj, f, **kwargs)
+        if 'compress' in kwargs and kwargs['compress']:
+            with gzip.open(f'{filepath}.gz', "wb") as f:
+                self.dump_to_fileobj(obj, f)
+        else:
+            with open(filepath, mode) as f:
+                self.dump_to_fileobj(obj, f)
 
 
 @register_handler(['yaml', 'yml'])
 class YamlHandler(BaseFileHandler):
-
     def load_from_fileobj(self, file, **kwargs):
         kwargs.setdefault('Loader', yaml.FullLoader)
         return yaml.load(file, **kwargs)
@@ -79,13 +84,13 @@ class YamlHandler(BaseFileHandler):
 
 @register_handler(['pkl', 'pickle'])
 class PickleHandler(BaseFileHandler):
-
     def load_from_fileobj(self, file, **kwargs):
         return pickle.load(file, **kwargs)
 
     def load_from_path(self, filepath, **kwargs):
-        return super(PickleHandler, self).load_from_path(
-            filepath, mode='rb', **kwargs)
+        return super(PickleHandler, self).load_from_path(filepath,
+                                                         mode='rb',
+                                                         **kwargs)
 
     def dump_to_str(self, obj, **kwargs):
         kwargs.setdefault('protocol', 2)
@@ -96,8 +101,7 @@ class PickleHandler(BaseFileHandler):
         pickle.dump(obj, file, **kwargs)
 
     def dump_to_path(self, obj, filepath, **kwargs):
-        super(PickleHandler, self).dump_to_path(
-            obj, filepath, mode='wb', **kwargs)
+        super().dump_to_path(obj, filepath, mode='wb', **kwargs)
 
 
 def load(file, format=None, **kwargs):
@@ -119,7 +123,9 @@ def load(file, format=None, **kwargs):
     if isinstance(file, Path):
         file = str(file)
     if format is None and is_str(file):
-        format = file.split('.')[-1]
+        file_name_segs = file.split('.')
+        format = file_name_segs[-1]
+
     if format not in FILEIO_HANDLERS:
         raise TypeError(f'Unsupported format: {format}')
 

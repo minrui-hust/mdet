@@ -1,5 +1,6 @@
 from mdet.utils.factory import FI
 import numpy as np
+from mdet.core.box_np_ops import rotate2d
 
 
 @FI.register
@@ -55,7 +56,7 @@ class PcdShuffler(object):
         super().__init__()
 
     def __call__(self, sample, info):
-        np.random.shuffle(sample['data']['pcd'].points)
+        sample['data']['pcd'].points = np.random.permutation(sample['data']['pcd'].points)
 
 
 @FI.register
@@ -74,7 +75,7 @@ class PcdGlobalTransform(object):
             Defaults to [0.95, 1.05].
     '''
 
-    def __init__(self, translation_std=[0,0,0], rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]):
+    def __init__(self, translation_std=[0, 0, 0], rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]):
         super().__init__()
 
         self.translation_std = np.array(translation_std, dtype=np.float32)
@@ -87,10 +88,11 @@ class PcdGlobalTransform(object):
         self._translate(sample)
 
     def _scale(self, sample):
-        scale_factor = np.random.uniform(self.scale_range[0], self.scale_range[1])
+        scale_factor = np.random.uniform(
+            self.scale_range[0], self.scale_range[1])
 
         # scale points
-        sample['data']['pcd'].points[:,:3] *= scale_factor
+        sample['data']['pcd'].points[:, :3] *= scale_factor
 
         # scale gt boxes
         sample['anno'].boxes[:, :3] *= scale_factor
@@ -99,22 +101,27 @@ class PcdGlobalTransform(object):
         alpha = np.random.uniform(self.rot_range[0], self.rot_range[1])
         cos_alpha = np.cos(alpha)
         sin_alpha = np.sin(alpha)
-        rotm = np.array([[cos_alpha, -sin_alpha],[sin_alpha, cos_alpha]], dtype=np.float32)
+        rotm = np.array(
+            [[cos_alpha, -sin_alpha], [sin_alpha, cos_alpha]], dtype=np.float32)
 
         # rotate points
-        sample['data']['pcd'].points[:, :2] = np.matmul(sample['data']['pcd'].points[:, :2], rotm)
+        sample['data']['pcd'].points[:, :2] = sample['data']['pcd'].points[:, :2] @ rotm
 
-        # rotate boxes
-        sample['anno'].boxes[:, :2] = np.matmul(sample['anno'].boxes[:, :2], rotm)
+        #  rotate boxes center
+        sample['anno'].boxes[:, :2] = sample['anno'].boxes[:, :2] @ rotm
+
+        # rotate boxes rotation
+        sample['anno'].boxes[:, 6:] = sample['anno'].boxes[:, 6:] @ rotm
 
     def _translate(self, sample):
         translation = np.random.normal(scale=self.translation_std, size=3)
 
         # translate points
-        sample['data']['pcd'].points[:,:3] += translation 
+        sample['data']['pcd'].points[:, :3] += translation
 
         # translate gt boxes
-        sample['anno'].boxes[:,:3] += translation
+        sample['anno'].boxes[:, :3] += translation
+
 
 @FI.register
 class PcdMirrorFlip(object):
@@ -129,14 +136,16 @@ class PcdMirrorFlip(object):
         self.flip_prob = flip_prob
 
     def __call__(self, sample, info):
-         pass
+        self._mirror(sample)
+        self._flip(sample)
 
     def _mirror(self, sample):
         if self.mirror_prob < np.random.rand():
             return
 
         # mirror points
-        sample['data']['pcd'].points[:, 1] = -sample['data']['pcd'].points[:, 1]
+        sample['data']['pcd'].points[:, 1] = - \
+            sample['data']['pcd'].points[:, 1]
 
         # mirror boxes
         sample['anno'].boxes[:, 1] = -sample['anno'].boxes[:, 1]
@@ -146,8 +155,32 @@ class PcdMirrorFlip(object):
             return
 
         # flip points
-        sample['data']['pcd'].points[:, 0] = -sample['data']['pcd'].points[:, 0]
+        sample['data']['pcd'].points[:, 0] = - \
+            sample['data']['pcd'].points[:, 0]
 
         # flip boxes
         sample['anno'].boxes[:, 0] = -sample['anno'].boxes[:, 0]
 
+
+@FI.register
+class PcdObjectSampler(object):
+    r'''
+    Random sample ground truth
+    '''
+
+    def __init__(self, db_sampler):
+        super().__init__()
+        self.db_sampler = FI.create(db_sampler)
+
+    def __call__(self, sample, info):
+        sampled = self.db_sampler.sample_all(sample['anno'])
+
+        # merge sampled and original
+        sample['anno'] += sampled['sample_anno']
+
+        # remove points in sampled boxes
+        sample['data']['pcd'].remove_points_in_boxes(
+            sampled['sample_anno'].boxes)
+
+        # add points in sampled boxes
+        sample['data']['pcd'] += sampled['sample_pcd']

@@ -27,12 +27,15 @@ class WaymoDet3dConverter(object):
     def __call__(self, raw_root_path, out_root_path, split):
         convert(raw_root_path, out_root_path, split)
 
+
 def convert(raw_root_path, out_root_path, split):
     record_path = osp.join(raw_root_path, split)
     output_path = osp.join(out_root_path, split)
 
-    record_path_list = [osp.join(record_path, fname) for fname in os.listdir(
-        record_path) if fname.endswith('.tfrecord')]
+    record_path_list = [
+        osp.join(record_path, fname) for fname in os.listdir(record_path)
+        if fname.endswith('.tfrecord')
+    ]
     print(f'Number of record to process: {len(record_path_list)}')
 
     pcd_path = os.path.join(output_path, 'pcds')
@@ -40,7 +43,7 @@ def convert(raw_root_path, out_root_path, split):
     os.makedirs(pcd_path, exist_ok=True)
     os.makedirs(anno_path, exist_ok=True)
 
-    with mp.Pool(int(mp.cpu_count()/2)) as p:
+    with mp.Pool(int(mp.cpu_count() / 2)) as p:
         p.map(partial(convert_one, pcd_path=pcd_path, anno_path=anno_path),
               record_path_list)
 
@@ -55,10 +58,8 @@ def convert_one(record_path, pcd_path, anno_path):
 
         seq_name = annos['seq_name']
 
-        io.dump(
-            points, f'{pcd_path}/{seq_name}-{frame_id}.pkl')
-        io.dump(
-            annos, f'{anno_path}/{seq_name}-{frame_id}.pkl')
+        io.dump(points, f'{pcd_path}/{seq_name}-{frame_id}.pkl', compress=True)
+        io.dump(annos, f'{anno_path}/{seq_name}-{frame_id}.pkl')
 
 
 def decode_point(frame):
@@ -115,7 +116,8 @@ def extract_points_from_range_image(laser, calibration, frame_pose):
             range_image_top_pose_tensor[..., 0],
             range_image_top_pose_tensor[..., 1],
             range_image_top_pose_tensor[..., 2])
-        range_image_top_pose_tensor_translation = range_image_top_pose_tensor[..., 3:]
+        range_image_top_pose_tensor_translation = range_image_top_pose_tensor[
+            ..., 3:]
         range_image_top_pose_tensor = transform_utils.get_transform(
             range_image_top_pose_tensor_rotation,
             range_image_top_pose_tensor_translation)
@@ -182,12 +184,21 @@ def extract_objects(laser_labels):
                 custom_level = 2
 
         objects.append({
-            'name': name,
-            'type': type,
-            'box': np.array([box.center_x, box.center_y, box.center_z, box.length,
-                             box.width, box.height, box.heading], dtype=np.float32),
-            'num_points': num_points,
-            'level': level,
-            'custom_level': custom_level,
+            'name':
+            name,
+            'type':
+            type,
+            'box':
+            np.array([
+                box.center_x, box.center_y, box.center_z, box.length,
+                box.width, box.height, box.heading
+            ],
+                     dtype=np.float32),
+            'num_points':
+            num_points,
+            'level':
+            level,
+            'custom_level':
+            custom_level,
         })
     return objects

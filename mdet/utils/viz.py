@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import open3d as o3d
 import math
+from copy import deepcopy
 
 
 class Visualizer(object):
@@ -56,8 +57,8 @@ class Visualizer(object):
 
         points = points.copy()
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points[:, :3])
-        pcd.colors = o3d.utility.Vector3dVector(point_color)
+        pcd.points = o3d.utility.Vector3dVector(deepcopy(points[:, :3]))
+        pcd.colors = o3d.utility.Vector3dVector(deepcopy(point_color))
 
         self.viz.point_size = point_size
         self.viz.add_geometry('pointcloud', pcd)

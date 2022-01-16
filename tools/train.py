@@ -36,8 +36,8 @@ def parse_args():
                         help='overfit batch num, used for debug')
     parser.add_argument('--profile', default=False, action='store_true',
                         help='wether don profile, use together with overfit')
-    parser.add_argument('--lr_scale', type=float,
-                        help='when batch size varies, we need to rescale learning rate')
+    parser.add_argument('--autoscale_lr', default=False, action='store_true',
+                        help='disable auto scale learning rate according to gpu number')
     return parser.parse_args()
 
 
@@ -50,8 +50,8 @@ def main(args):
     config = ConfigLoader.load(args.config)
 
     # config override
-    if args.lr_scale is not None:
-        config['lr_scale'] = args.lr_scale
+    if args.autoscale_lr:
+        config['lr_scale'] *= len(args.gpu)
 
     # lightning module
     pl_module = PlWrapper(config)

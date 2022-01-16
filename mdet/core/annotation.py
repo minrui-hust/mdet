@@ -1,3 +1,5 @@
+import numpy as np
+
 
 class Annotation3d(object):
     def __init__(self, boxes, types, scores=None, num_points=None):
@@ -16,21 +18,24 @@ class Annotation3d(object):
         shape: N, int32
         type id in [0, type_num)
         '''
-        self.types = types
+        self.types = types if types is not None else np.full(
+            boxes.shape[0], -1, dtype=np.int32)
 
         r'''
         optional
         shape: N, float32
         indicate box confidence
         '''
-        self.scores = scores
+        self.scores = scores if scores is not None else np.full(
+            boxes.shape[0], 0, dtype=boxes.dtype)
 
         r'''
         optional
         shape: N, int32
         indicate how many points in each box
         '''
-        self.num_points = num_points
+        self.num_points = num_points if num_points is not None else np.full(
+            boxes.shape[0], 0, dtype=np.int32)
 
     def __getitem__(self, idx):
         return Annotation3d(
@@ -49,3 +54,19 @@ class Annotation3d(object):
             s += f',\nnum_points:\n{self.num_points}'
         s += '\n}'
         return s
+
+    def __add__(self, other):
+        box_list = [self.boxes, other.boxes]
+        type_list = [self.types, other.types]
+        score_list = [self.scores, other.scores]
+        num_points_list = [self.num_points, other.num_points]
+
+        return Annotation3d(
+            np.concatenate(box_list, axis=0),
+            np.concatenate(type_list, axis=0),
+            np.concatenate(score_list, axis=0),
+            np.concatenate(num_points_list, axis=0),
+        )
+
+    def __iadd__(self, other):
+        return self.__add__(other)

@@ -24,7 +24,8 @@ class MDetDataset(TorchDataset):
 
         # load sample info
         sample_infos = io.load(self.info_path, format='pkl')
-        self.sample_infos = [info for i, info in enumerate(sample_infos) if ( self.filter is None or self.filter(info, i))]
+        self.sample_infos = [info for i, info in enumerate(
+            sample_infos) if (self.filter is None or self.filter(info, i))]
 
     def __len__(self):
         return len(self.sample_infos)

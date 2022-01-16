@@ -120,7 +120,7 @@ dataloader_train = dict(
             types=types,
         ),
         transforms=[
-            dict(type='RangeFilter', point_range=point_range),
+            dict(type='PcdRangeFilter', point_range=point_range),
             dict(type='PcdIntensityNormlizer'),
         ],
     ),
