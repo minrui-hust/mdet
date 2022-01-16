@@ -3,7 +3,7 @@ from copy import deepcopy
 
 
 # global config
-types = [('Vehicle', [1])]
+types = [('Vehicle', [1]), ('Cyclist', [4]), ('Pedestrian', [2])]
 
 point_range = [-75.52, -75.52, -2, 75.52, 75.52, 4.0]
 voxel_size = [0.32, 0.32, 6.0]
@@ -13,7 +13,9 @@ out_grid_size = [0.64, 0.64]
 out_grid_reso = [236, 236]
 
 batch_size = 2
-max_epochs = 96
+max_epochs = 36
+lr_scale = 1.0
+dataset_root = '/data/tmp/waymo'
 
 # model config
 model_train = dict(
@@ -89,7 +91,7 @@ codec_train = dict(
         nms_cfg=dict(
             pre_num=1024,
             post_num=256,
-            overlap_thresh=0.01,
+            overlap_thresh=0.1,
         ),
     ),
     loss_cfg=dict(
@@ -112,6 +114,15 @@ codec_infer['encode_cfg']['encode_anno'] = False
 
 
 # data config
+db_sampler = dict(
+    type='GroundTruthSampler',
+    info_path=f'{dataset_root}/training_info_gt.pkl',
+    sample_groups={'Pedestrian': 10, 'Cyclist': 10, 'Vehicle': 15},
+    labels=types,
+    pcd_loader=dict(type='WaymoNSweepLoader', load_dim=5, nsweep=1),
+    filter=dict(type='FilterByNumpoints', min_num_points=10), # TODO
+)
+
 dataloader_train = dict(
     batch_size=batch_size,
     num_workers=4,
@@ -119,11 +130,14 @@ dataloader_train = dict(
     pin_memory=True,
     dataset=dict(
         type='WaymoDet3dDataset',
-        info_path='/data/tmp/waymo/training_info.pkl',
-        load_opt=dict( load_dim=5, num_sweeps=1, types=types,),
+        info_path=f'{dataset_root}/training_info.pkl',
+        load_opt=dict(load_dim=5, nsweep=1, types=types,),
         transforms=[
-            dict(type='RangeFilter', point_range=point_range),
             dict(type='PcdIntensityNormlizer'),
+            dict(type='PcdObjectSampler', db_sampler=db_sampler),
+            dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
+            dict(type='PcdRangeFilter', point_range=point_range),
+            dict(type='PcdShuffler'),
         ],
         filter=dict(type='IntervalDownsampler', interval=5),
     ),
@@ -131,12 +145,11 @@ dataloader_train = dict(
 
 dataloader_eval = deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
-dataloader_eval['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
-#  dataloader_val['dataset']['info_path'] = '/data/tmp/waymo/training_info.pkl'
+dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 
 dataloader_infer = deepcopy(dataloader_train)
 dataloader_infer['shuffle'] = False
-dataloader_infer['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
+dataloader_infer['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 
 # collect config
 model = dict(
@@ -161,18 +174,21 @@ fit = dict(
     max_epochs=max_epochs,
     optimizer=dict(
         type='Adam',
-        lr=3e-4 / 2,
+        weight_decay=0.01,
         betas=(0.9, 0.99),
+        lr=0.003 / 16 * batch_size * lr_scale,
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=3e-4 / 2,
+        max_lr=0.003 / 16 * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
         pct_start=0.4,
     ),
+    grad_clip=dict(type='norm', value=35),
 )
+
 
 runtime = dict(
     train=dict(
