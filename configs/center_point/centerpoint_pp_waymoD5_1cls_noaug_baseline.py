@@ -1,20 +1,23 @@
-import torch
-from copy import deepcopy
+from copy import deepcopy as _deepcopy
+from mdet.utils.global_config import GCFG
 
+# global config maybe override by command line
+batch_size = GCFG['batch_size'] or 2
+max_epochs = GCFG['max_epochs'] or 32
+lr_scale = GCFG['lr_scale'] or 1.0
+dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
-types = [('Vehicle', [1]), ('Pedestrian', [2])]
+types = [('Vehicle', [1])]
 
-point_range= [-74.88, -74.88, -2, 74.88, 74.88, 4.0]
+point_range = [-75.52, -75.52, -2, 75.52, 75.52, 4.0]
 voxel_size = [0.32, 0.32, 6.0]
-voxel_reso = [468, 468, 1]
+voxel_reso = [472, 472, 1]
 
-out_grid_size = [0.32, 0.32]
-out_grid_reso = [468, 468]
+out_grid_size = [0.64, 0.64]
+out_grid_reso = [236, 236]
 
-batch_size = 1
-max_epochs = 36
-lr_scale = 1.0
+point_dim = 5
 
 # model config
 model_train = dict(
@@ -24,14 +27,14 @@ model_train = dict(
         point_range=point_range,
         voxel_size=voxel_size,
         voxel_reso=voxel_reso,
-        max_points=20,
+        max_points=32,
         max_voxels=32000,
     ),
     backbone3d=dict(
         type='PillarFeatureNet',
         pillar_feat=[
             ('position', 3),
-            ('attribute', 2),
+            ('attribute', point_dim-3),
             ('center_offset', 2),
             ('mean_offset', 3),
             #  ('distance', 1),
@@ -39,12 +42,12 @@ model_train = dict(
         voxel_reso=voxel_reso,
         voxel_size=voxel_size,
         point_range=point_range,
-        pfn_channels=[64, 64, ],
+        pfn_channels=[64, ],
     ),
     backbone2d=dict(
         type='SECOND',
         layer_nums=[3, 5, 5],
-        layer_strides=[1, 2, 2],
+        layer_strides=[2, 2, 2],
         out_channels=[64, 128, 256],
         in_channels=64,
     ),
@@ -69,10 +72,9 @@ model_train = dict(
     ),
 )
 
-model_eval = deepcopy(model_train)
-model_eval['voxelization']['max_voxels'] = 60000
+model_eval = _deepcopy(model_train)
 
-model_infer = deepcopy(model_train)
+model_infer = _deepcopy(model_train)
 
 
 # codecs config
@@ -89,9 +91,9 @@ codec_train = dict(
     ),
     decode_cfg=dict(
         nms_cfg=dict(
-            pre_num=4096,
-            post_num=500,
-            overlap_thresh=0.7,
+            pre_num=1024,
+            post_num=256,
+            overlap_thresh=0.1,
         ),
     ),
     loss_cfg=dict(
@@ -107,9 +109,9 @@ codec_train = dict(
     ),
 )
 
-codec_eval = deepcopy(codec_train)
+codec_eval = _deepcopy(codec_train)
 
-codec_infer = deepcopy(codec_train)
+codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
 
 
@@ -121,28 +123,27 @@ dataloader_train = dict(
     pin_memory=True,
     dataset=dict(
         type='WaymoDet3dDataset',
-        info_path='/data/tmp/waymo/training_info.pkl',
-        load_opt=dict(
-            load_dim=5,
-            num_sweeps=1,
-            types=types,
-        ),
+        info_path=f'{dataset_root}/training_info.pkl',
+        load_opt=dict(load_dim=point_dim, nsweep=1, types=types,),
         transforms=[
             dict(type='PcdIntensityNormlizer'),
-            dict(type='PcdShuffler'),
-            dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
             dict(type='PcdRangeFilter', point_range=point_range),
+            dict(type='PcdShuffler'),
         ],
+        filter=dict(type='IntervalDownsampler', interval=5),
     ),
 )
 
-dataloader_eval = deepcopy(dataloader_train)
+dataloader_eval = _deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
-dataloader_eval['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
+dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
+dataloader_eval['dataset']['transforms'] = [
+    dict(type='PcdIntensityNormlizer'),
+    dict(type='PcdRangeFilter', point_range=point_range),
+    dict(type='PcdShuffler'),
+]
 
-dataloader_infer = deepcopy(dataloader_train)
-dataloader_infer['shuffle'] = False
-dataloader_infer['dataset']['info_path'] = '/data/tmp/waymo/validation_info.pkl'
+dataloader_infer = _deepcopy(dataloader_eval)
 
 # collect config
 model = dict(
@@ -166,14 +167,13 @@ data = dict(
 fit = dict(
     max_epochs=max_epochs,
     optimizer=dict(
-        type='Adam',
+        type='AdamW',
         weight_decay=0.01,
         betas=(0.9, 0.99),
-        lr=0.003 / 16 * batch_size * lr_scale,
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.003 / 16 * batch_size * lr_scale,
+        max_lr=0.001 / 16 * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
@@ -181,6 +181,7 @@ fit = dict(
     ),
     grad_clip=dict(type='norm', value=35),
 )
+
 
 runtime = dict(
     train=dict(
@@ -190,5 +191,5 @@ runtime = dict(
         ],
     ),
     eval=dict(output_folder=None, evaluate=False),
-    infer=dict(),
+    test=dict(),
 )

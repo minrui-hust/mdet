@@ -181,7 +181,6 @@ def create_gt_database_one_seq(seq_item, root_path, split):
         seq_id = anno['seq_name']
         frame_id = anno['frame_id']
         objects = anno['objects']
-
         if len(objects) <= 0:
             continue
 
