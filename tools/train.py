@@ -16,6 +16,7 @@ import mdet.model
 import mdet.utils.config_loader as ConfigLoader
 import mdet.utils.numpy_pickle
 from mdet.utils.pl_wrapper import PlWrapper
+from mdet.utils.global_config import GCFG
 
 
 r'''
@@ -50,19 +51,20 @@ def main(args):
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
 
+    # pre config override
+    if args.autoscale_lr:
+        print(f'INFO: override lr_scale to {len(args.gpu)}')
+        GCFG['lr_scale'] = str(len(args.gpu))
+
+    if args.dataset_root:
+        print(f'INFO: override dataset_root to {args.dataset_root}')
+        GCFG['dataset_root'] = args.dataset_root
+
     # load config
     config = ConfigLoader.load(args.config)
 
-    # config hack
+    # post config override
     config['ngpu'] = len(args.gpu)
-
-    if args.autoscale_lr:
-        config['lr_scale'] *= len(args.gpu)
-        print(f'INFO: override lr_scale to {config["lr_scale"]}')
-
-    if args.dataset_root:
-        config['dataset_root'] = args.dataset_root
-        print(f'INFO: override dataset_root to {config["dataset_root"]}')
 
     # lightning module
     pl_module = PlWrapper(config)

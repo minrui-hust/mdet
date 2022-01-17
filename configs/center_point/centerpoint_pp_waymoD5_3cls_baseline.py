@@ -1,5 +1,11 @@
 from copy import deepcopy as _deepcopy
+from mdet.utils.global_config import GCFG
 
+# global config maybe override by command line
+batch_size = GCFG['batch_size'] or 2
+max_epochs = GCFG['max_epochs'] or 36
+lr_scale = GCFG['lr_scale'] or 1.0
+dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
 types = [('Vehicle', [1]), ('Cyclist', [4]), ('Pedestrian', [2])]
@@ -11,10 +17,6 @@ voxel_reso = [472, 472, 1]
 out_grid_size = [0.64, 0.64]
 out_grid_reso = [236, 236]
 
-batch_size = 2
-max_epochs = 36
-lr_scale = 1.0
-dataset_root = '/data/tmp/waymo'
 point_dim = 4
 
 # model config
