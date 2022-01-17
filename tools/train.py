@@ -55,7 +55,7 @@ def main(args):
     # pre config override
     if args.autoscale_lr:
         print(f'INFO: override lr_scale to {len(args.gpu)}')
-        GCFG['lr_scale'] = str(len(args.gpu))
+        GCFG['lr_scale'] = len(args.gpu)
 
     if args.dataset_root:
         print(f'INFO: override dataset_root to {args.dataset_root}')
