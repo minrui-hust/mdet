@@ -1,5 +1,4 @@
-import torch
-from copy import deepcopy
+from copy import deepcopy as _deepcopy
 
 
 # global config
@@ -71,9 +70,9 @@ model_train = dict(
     ),
 )
 
-model_eval = deepcopy(model_train)
+model_eval = _deepcopy(model_train)
 
-model_infer = deepcopy(model_train)
+model_infer = _deepcopy(model_train)
 
 
 # codecs config
@@ -108,9 +107,9 @@ codec_train = dict(
     ),
 )
 
-codec_eval = deepcopy(codec_train)
+codec_eval = _deepcopy(codec_train)
 
-codec_infer = deepcopy(codec_train)
+codec_infer = _deepcopy(codec_train)
 codec_infer['encode_cfg']['encode_anno'] = False
 
 
@@ -145,11 +144,11 @@ dataloader_train = dict(
     ),
 )
 
-dataloader_eval = deepcopy(dataloader_train)
+dataloader_eval = _deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 
-dataloader_infer = deepcopy(dataloader_train)
+dataloader_infer = _deepcopy(dataloader_train)
 dataloader_infer['shuffle'] = False
 dataloader_infer['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 

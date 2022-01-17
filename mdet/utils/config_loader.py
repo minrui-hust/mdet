@@ -29,7 +29,7 @@ def __load_py(full_config_path):
         mod = import_module(tmp_module_name)
         sys.path.pop(0)
         cfg_dict = {name: value for name,
-                    value in mod.__dict__.items() if not name.startswith('__')}
+                    value in mod.__dict__.items() if not name.startswith('_')}
         del sys.modules[tmp_module_name]
         tmp_config_file.close()
         return cfg_dict

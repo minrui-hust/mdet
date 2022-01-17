@@ -8,6 +8,8 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 import pytorch_lightning.loggers as loggers
 from pytorch_lightning.profiler import PyTorchProfiler
 import torch
+import mdet.utils.io as io
+import shutil
 
 import mdet.data
 import mdet.model
@@ -51,7 +53,9 @@ def main(args):
     # load config
     config = ConfigLoader.load(args.config)
 
-    # config override
+    # config hack
+    config['ngpu'] = len(args.gpu)
+
     if args.autoscale_lr:
         config['lr_scale'] *= len(args.gpu)
         print(f'INFO: override lr_scale to {config["lr_scale"]}')
@@ -118,6 +122,11 @@ def main(args):
     if 'grad_clip' in config['fit']:
         grad_clip_val = config['fit']['grad_clip']['value']
         grad_clip_alg = config['fit']['grad_clip']['type']
+
+    # backup config used for training
+    os.makedirs(checkpoint_folder, exist_ok=True)
+    io.dump(config, os.path.join(checkpoint_folder, 'config.yaml'))
+    shutil.copy(args.config, os.path.join(checkpoint_folder, 'config.py'))
 
     # setup trainner
     trainer = pl.Trainer(

@@ -21,16 +21,16 @@ class PlWrapper(pl.LightningModule):
         self.train_model = FI.create(config['model']['train'])
         self.train_model.set_train()
 
-        self.util_models = {} # use normal dict to avoid register parameters
+        self.util_models = {}  # use normal dict to avoid register parameters
         self.util_models['eval_model'] = FI.create(config['model']['eval'])
         self.util_models['eval_model'].set_eval()
 
-        self.util_models['infer_model']= FI.create(config['model']['infer'])
+        self.util_models['infer_model'] = FI.create(config['model']['infer'])
         self.util_models['infer_model'].set_infer()
 
         # codec
         self.train_codec = FI.create(config['codec']['train'])
-        self.eval_codec  = FI.create(config['codec']['eval'])
+        self.eval_codec = FI.create(config['codec']['eval'])
         self.infer_codec = FI.create(config['codec']['infer'])
 
         # dataset
@@ -56,7 +56,8 @@ class PlWrapper(pl.LightningModule):
         self.eval_epoch_interest_set = config['runtime']['eval'].get(
             'epoch_interest_set', set())
         self.eval_step_hook = config['runtime']['eval'].get('step_hook', None)
-        self.eval_epoch_hook = config['runtime']['eval'].get('epoch_hook', None)
+        self.eval_epoch_hook = config['runtime']['eval'].get(
+            'epoch_hook', None)
         if self.eval_evaluate:
             self.eval_interest_set |= {'anno', 'pred'}
             self.eval_epoch_interest_set |= {'anno', 'pred'}
@@ -117,7 +118,8 @@ class PlWrapper(pl.LightningModule):
         eval_step_out = []
         if self.eval_epoch_interest_set and sample_list:
             for sample in sample_list:
-                eval_step_out.append(sample.select(self.eval_epoch_interest_set))
+                eval_step_out.append(sample.select(
+                    self.eval_epoch_interest_set))
 
         return eval_step_out
 
@@ -161,15 +163,23 @@ class PlWrapper(pl.LightningModule):
         sched_cfg = self.config['fit']['scheduler'].copy()
         sched_type_name = sched_cfg.pop('type')
 
-        # hack for specific lr_scheduler
+        # hack lr_scheduler config for specific lr_scheduler
+        sched_interval = 'epoch'
         if sched_type_name == 'OneCycleLR':
-            sched_cfg['total_steps'] = len(
-                self.train_dataloader()) * self.config['fit']['max_epochs']
+            sched_cfg['total_steps'] = int(len(self.train_dataloader(
+            ))/self.config['ngpu']) * self.config['fit']['max_epochs']
+            sched_interval = 'step'
 
         scheduler = optim.lr_scheduler.__dict__[
             sched_type_name](optimizer, **sched_cfg)
 
-        return [optimizer], [scheduler]
+        return dict(
+            optimizer=optimizer,
+            lr_scheduler=dict(
+                scheduler=scheduler,
+                interval=sched_interval,
+            ),
+        )
 
     def on_validation_start(self):
         self.track_model(self.train_model, self.eval_model)
