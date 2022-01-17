@@ -1,6 +1,7 @@
 import argparse
 import os
 import os.path as osp
+import sys
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
@@ -125,10 +126,12 @@ def main(args):
         grad_clip_val = config['fit']['grad_clip']['value']
         grad_clip_alg = config['fit']['grad_clip']['type']
 
-    # backup config used for training
+    # backup config and cmdline used for training
     os.makedirs(checkpoint_folder, exist_ok=True)
     io.dump(config, os.path.join(checkpoint_folder, 'config.yaml'))
     shutil.copy(args.config, os.path.join(checkpoint_folder, 'config.py'))
+    with open(os.path.join(checkpoint_folder, 'cmd.txt'), 'w+') as f:
+        print(' '.join(sys.argv), file=f)
 
     # setup trainner
     trainer = pl.Trainer(
