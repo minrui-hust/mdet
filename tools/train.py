@@ -5,7 +5,7 @@ import sys
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, LambdaCallback
 import pytorch_lightning.loggers as loggers
 from pytorch_lightning.profiler import PyTorchProfiler
 import torch
@@ -108,6 +108,15 @@ def main(args):
     callbacks.append(LearningRateMonitor(
         logging_interval='step', log_momentum=True))
 
+    # backup config callback
+    def log_config():
+        os.makedirs(checkpoint_folder, exist_ok=True)
+        io.dump(config, os.path.join(checkpoint_folder, 'config.yaml'))
+        shutil.copy(args.config, os.path.join(checkpoint_folder, 'config.py'))
+        with open(os.path.join(checkpoint_folder, 'cmd.txt'), 'w+') as f:
+            print(' '.join(sys.argv), file=f)
+    callbacks.append(LambdaCallback(setup=lambda *arg, **kwargs: log_config()))
+
     # profiler
     profiler = None
     if args.profile:
@@ -125,13 +134,6 @@ def main(args):
     if 'grad_clip' in config['fit']:
         grad_clip_val = config['fit']['grad_clip']['value']
         grad_clip_alg = config['fit']['grad_clip']['type']
-
-    # backup config and cmdline used for training
-    os.makedirs(checkpoint_folder, exist_ok=True)
-    io.dump(config, os.path.join(checkpoint_folder, 'config.yaml'))
-    shutil.copy(args.config, os.path.join(checkpoint_folder, 'config.py'))
-    with open(os.path.join(checkpoint_folder, 'cmd.txt'), 'w+') as f:
-        print(' '.join(sys.argv), file=f)
 
     # setup trainner
     trainer = pl.Trainer(
