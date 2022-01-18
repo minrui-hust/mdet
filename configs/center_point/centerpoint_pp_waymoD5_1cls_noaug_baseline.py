@@ -142,6 +142,7 @@ dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdRangeFilter', point_range=point_range),
     dict(type='PcdShuffler'),
 ]
+dataloader_eval['dataset']['filter'] = None
 
 dataloader_infer = _deepcopy(dataloader_eval)
 
