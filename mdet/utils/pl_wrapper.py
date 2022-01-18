@@ -226,4 +226,5 @@ class PlWrapper(pl.LightningModule):
                           keep_initializers_as_inputs=False,
                           opset_version=11,
                           operator_export_type=torch.onnx.OperatorExportTypes.ONNX,
+                          verbose=True,
                           **kwargs)

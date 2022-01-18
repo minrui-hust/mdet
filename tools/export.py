@@ -10,6 +10,7 @@ import yaml
 import mdet.data
 import mdet.model
 import mdet.utils.config_loader as ConfigLoader
+from mdet.utils.global_config import GCFG
 import mdet.utils.io as io
 import mdet.utils.numpy_pickle
 from mdet.utils.pl_wrapper import PlWrapper
@@ -25,11 +26,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train model')
     parser.add_argument('config', help='training config file')
     parser.add_argument('--ckpt', help='the checkpoint file to resume from')
-    parser.add_argument('--output', type=str, help='the output onnx model path')
+    parser.add_argument('--output', type=str,
+                        help='the output onnx model path')
     parser.add_argument('--gpu', type=int, nargs='+',
                         default=[0], help='specify the gpus used for training')
     parser.add_argument('--relax', default=False, action='store_true',
                         help='wether load checkpoint strictly')
+    parser.add_argument('--dataset_root', type=str,
+                        help='the dataset root folder, this will override config')
     return parser.parse_args()
 
 
@@ -37,6 +41,11 @@ def main(args):
     config_name, _ = os.path.splitext(os.path.basename(args.config))
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
+
+    # pre config load override
+    if args.dataset_root:
+        print(f'INFO: override dataset_root to {args.dataset_root}')
+        GCFG['dataset_root'] = args.dataset_root
 
     # hack infer config for export
     config = ConfigLoader.load(args.config)
@@ -47,7 +56,8 @@ def main(args):
 
     # create lightning module
     if args.ckpt:
-        pl_module = PlWrapper.load_from_checkpoint(config=config, checkpoint_path=args.ckpt, strict=(not args.relax))
+        pl_module = PlWrapper.load_from_checkpoint(
+            config=config, checkpoint_path=args.ckpt, strict=(not args.relax))
     else:
         pl_module = PlWrapper(config=config)
 
