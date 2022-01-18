@@ -65,6 +65,7 @@ def main(args):
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
 
+    # pre config load override
     if args.dataset_root:
         print(f'INFO: override dataset_root to {args.dataset_root}')
         GCFG['dataset_root'] = args.dataset_root
