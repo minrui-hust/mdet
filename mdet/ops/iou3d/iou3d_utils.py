@@ -20,7 +20,7 @@ class _nms_bev(Function):
             valid_num: first valid_num of selected is valid
         """
 
-        selected = boxes.new_empty(max_out, dtype=torch.int32)
+        selected = boxes.new_zeros(max_out, dtype=torch.int32)
         valid_num = boxes.new_tensor(0, dtype=torch.int32)
 
         OpNMSBEV(boxes, scores, thresh, max_out, selected, valid_num)
