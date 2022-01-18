@@ -45,7 +45,7 @@ class CenterPointCodec(BaseCodec):
         # for loss
         self.criteria_heatmap = partial(
             loss.focal_loss, alpha=self.loss_cfg['alpha'], beta=self.loss_cfg['beta'])
-        self.criteria_regression = partial(F.l1_loss, reduction='mean')
+        self.criteria_regression = partial(loss.regression_loss, eps=1e-4)
 
     def encode_data(self, sample, info):
         # just pcd for now
@@ -145,7 +145,7 @@ class CenterPointCodec(BaseCodec):
         topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 8]
 
         # box for nms (bird eye view)
-        nms_boxes = topk_boxes[..., [0,1,3,4,6,7]]
+        nms_boxes = topk_boxes[..., [0, 1, 3, 4, 6, 7]]
 
         # do nms for each sample
         pred_list = []
@@ -156,7 +156,7 @@ class CenterPointCodec(BaseCodec):
                 topk_score[i],
                 self.decode_cfg['nms_cfg']['overlap_thresh'],
                 self.decode_cfg['nms_cfg']['post_num'],
-                )
+            )
             keep_indices = keep_indices.long()
             if not infer:
                 valid_indices = keep_indices[:valid_num]

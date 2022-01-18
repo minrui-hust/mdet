@@ -52,11 +52,15 @@ def is_str(x):
 
 def is_nan_or_inf(x, name='tensor'):
     if isinstance(x, list) or isinstance(x, tuple):
+        res = False
         for i, element in enumerate(x):
-            is_nan_or_inf(element, f'{name}.{i}')
+            res |= is_nan_or_inf(element, f'{name}.{i}')
+        return res
     elif isinstance(x, dict):
+        res = False
         for k, v in x.items():
-            is_nan_or_inf(v, f'{name}.{k}')
+            res |= is_nan_or_inf(v, f'{name}.{k}')
+        return res
     elif torch.is_tensor(x):
         if x.isnan().any():
             print(f'{name} has nan')

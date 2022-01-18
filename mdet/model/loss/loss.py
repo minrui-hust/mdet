@@ -26,9 +26,10 @@ def focal_loss(predict, target, positive_index, alpha=2.0, beta=4.0):
         return (positive_loss + negtive_loss) / positive_index.size(0)
 
 
-def regression_loss(predict, target):
+def regression_loss(predict, target, eps=1e-4):
     r'''
     predict, target: N x D
     '''
-    loss = F.l1_loss(predict, target, reduction='none')
+    loss = F.l1_loss(predict, target, reduction='sum')
+    loss = loss / (target.nelement() + eps)
     return loss

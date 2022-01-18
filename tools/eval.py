@@ -11,6 +11,7 @@ import yaml
 import mdet.data
 import mdet.model
 import mdet.utils.config_loader as ConfigLoader
+from mdet.utils.global_config import GCFG
 import mdet.utils.io as io
 import mdet.utils.numpy_pickle
 from mdet.utils.pl_wrapper import PlWrapper
@@ -30,6 +31,8 @@ def parse_args():
                         choices=['train', 'eval'],  help='split to evaluate')
     parser.add_argument('--evaluate', action='store_true',
                         help='wether do evaluation')
+    parser.add_argument('--evaluate_loss', action='store_true',
+                        help='wether do evaluation loss')
     parser.add_argument(
         '--store_pred', help='output folder to store predictions(after postprocess)')
     parser.add_argument(
@@ -52,6 +55,8 @@ def parse_args():
                         help='wether don profile, use together with overfit')
     parser.add_argument('--relax', default=False, action='store_true',
                         help='wether load checkpoint strictly')
+    parser.add_argument('--dataset_root', type=str,
+                        help='the dataset root folder, this will override config')
     return parser.parse_args()
 
 
@@ -60,10 +65,14 @@ def main(args):
     print(f'Using config: {config_name}')
     print(f'Using gpu: {args.gpu}')
 
+    if args.dataset_root:
+        print(f'INFO: override dataset_root to {args.dataset_root}')
+        GCFG['dataset_root'] = args.dataset_root
+
     # hack config for evaluation
     config = ConfigLoader.load(args.config)
     config['data'][args.split]['shuffle'] = False
-    config['runtime']['eval']['log_loss'] = False
+    config['runtime']['eval']['log_loss'] = args.evaluate_loss
     config['runtime']['eval']['evaluate'] = args.evaluate
 
     interest_set = set()
@@ -115,7 +124,8 @@ def main(args):
 
     # create lightning module
     if args.ckpt:
-        pl_module = PlWrapper.load_from_checkpoint(config=config, checkpoint_path=args.ckpt, strict=(not args.relax))
+        pl_module = PlWrapper.load_from_checkpoint(
+            config=config, checkpoint_path=args.ckpt, strict=(not args.relax))
     else:
         pl_module = PlWrapper(config=config)
 
@@ -150,10 +160,8 @@ def main(args):
     )
 
     # do evaluation
-    trainer.validate(pl_module,
-                     dataloaders=getattr(
-                         pl_module, f'{args.split}_dataloader')()
-                     )
+    loader_name = 'val_dataloader' if args.split == 'eval' else f'{args.split}_dataloader'
+    trainer.validate(pl_module, dataloaders=getattr(pl_module, loader_name)())
 
 
 if __name__ == '__main__':
