@@ -35,6 +35,7 @@ dataset = dict(
     transforms=[
         dict(type='PcdIntensityNormlizer'),
         dict(type='PcdObjectSampler', db_sampler=db_sampler),
+        dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
         dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
         dict(type='PcdRangeFilter', point_range=point_range),
         dict(type='PcdShuffler'),
@@ -42,7 +43,8 @@ dataset = dict(
 )
 
 dataset = FI.create(dataset)
-dataset.plot(dataset[0])
+for i in range(len(dataset)):
+    dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2, num_workers=4, collate_fn=lambda x:x)
 

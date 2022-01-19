@@ -129,7 +129,7 @@ class PcdMirrorFlip(object):
     random mirror(left-right), and flip(up-down)
     '''
 
-    def __init__(self, mirror_prob=True, flip_prob=True):
+    def __init__(self, mirror_prob=0.5, flip_prob=0.5):
         super().__init__()
 
         self.mirror_prob = mirror_prob
@@ -149,6 +149,7 @@ class PcdMirrorFlip(object):
 
         # mirror boxes
         sample['anno'].boxes[:, 1] = -sample['anno'].boxes[:, 1]
+        sample['anno'].boxes[:, 7] = -sample['anno'].boxes[:, 7]
 
     def _flip(self, sample):
         if self.flip_prob < np.random.rand():
@@ -160,6 +161,7 @@ class PcdMirrorFlip(object):
 
         # flip boxes
         sample['anno'].boxes[:, 0] = -sample['anno'].boxes[:, 0]
+        sample['anno'].boxes[:, 6] = -sample['anno'].boxes[:, 6]
 
 
 @FI.register
