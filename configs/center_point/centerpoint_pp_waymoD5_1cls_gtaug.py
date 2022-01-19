@@ -118,7 +118,7 @@ codec_infer['encode_cfg']['encode_anno'] = False
 # data config
 db_sampler = dict(
     type='GroundTruthSampler',
-    info_path='/data/tmp/waymo/training_info_gt.pkl',
+    info_path=f'{dataset_root}/training_info_gt.pkl',
     sample_groups={'Pedestrian': 10, 'Cyclist': 10, 'Vehicle': 20},
     labels=types,
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
