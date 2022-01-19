@@ -119,7 +119,7 @@ codec_infer['encode_cfg']['encode_anno'] = False
 db_sampler = dict(
     type='GroundTruthSampler',
     info_path=f'{dataset_root}/training_info_gt.pkl',
-    sample_groups={'Pedestrian': 10, 'Cyclist': 10, 'Vehicle': 20},
+    sample_groups={'Vehicle': 20},
     labels=types,
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
     filter=dict(type='FilterByNumpoints', min_num_points=10),
