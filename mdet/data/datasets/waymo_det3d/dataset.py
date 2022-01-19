@@ -127,3 +127,45 @@ class WaymoNSweepLoader(object):
         points = np.concatenate(pcd_list, axis=0)
 
         return Pointcloud(points=points[:, :self.load_dim])
+
+
+@FI.register
+class WaymoObjectNSweepLoader(object):
+    def __init__(self, load_dim, nsweep=1):
+        super().__init__()
+        self.load_dim = load_dim
+        self.nsweep = nsweep
+
+    def __call__(self, sweeps):
+        r'''
+        Args:
+            sweep_info_list: sweep infos from current to past
+        '''
+        assert(self.nsweep > 0)
+
+        prefix, seq_id, frame_id, object_id = sweeps['prefix'],sweeps['seq_id'],sweeps['frame_id'],sweeps['object_id']
+
+        pcd_list = []
+        tf_map_vehicle0 = None
+        for sweep_id in range(self.nsweep):
+            sweep_frame_id = max(0, frame_id-sweep_id)
+            sweep_data_path = os.path.join(prefix, seq_id, f'{sweep_frame_id}-{object_id}.pkl')
+
+            if not os.path.exists(f'{sweep_data_path}.gz'):
+                assert(sweep_id>0)
+                continue
+
+            pcd, tf_map_vehicle = io.load(sweep_data_path, compress=True)
+
+            if sweep_id == 0:
+                tf_map_vehicle0 = tf_map_vehicle
+
+            if sweep_id > 0:
+                tf_cur_past = rigid.between(tf_map_vehicle0, tf_map_vehicle)
+                pcd = rigid.transform(tf_cur_past, pcd)
+            pcd_list.append(pcd)
+
+        points = np.concatenate(pcd_list, axis=0)
+
+        return Pointcloud(points=points[:, :self.load_dim])
+

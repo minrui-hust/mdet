@@ -20,7 +20,7 @@ db_sampler = dict(
     info_path='/data/tmp/waymo/training_info_gt.pkl',
     sample_groups={'Pedestrian': 10, 'Cyclist': 10, 'Vehicle': 20},
     labels=types,
-    pcd_loader=dict(type='WaymoNSweepLoader', load_dim=5, nsweep=1),
+    pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
     filter=dict(type='FilterByNumpoints', min_num_points=10),
 )
 

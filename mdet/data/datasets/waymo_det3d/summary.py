@@ -99,6 +99,46 @@ def create_gt_database(root_path, split):
                     split=split), seq_frame_list_dict.items())
 
 
+def create_gt_database_one_seq(seq_item, root_path, split):
+    gt_database_folder = os.path.join(root_path, 'gt_database', split)
+
+    # make sequence folder
+    seq_id, seq_frame_list = seq_item
+    seq_folder = os.path.join(gt_database_folder, seq_id)
+    os.makedirs(seq_folder, exist_ok=True)
+
+    anno_folder = os.path.join(root_path, split, 'annos')
+    pcd_folder = os.path.join(root_path, split, 'pcds')
+
+    for frame_name in tqdm(seq_frame_list):
+        anno_path = os.path.join(anno_folder, frame_name)
+        pcd_path = os.path.join(pcd_folder, frame_name)
+
+        anno = io.load(anno_path)
+        seq_id = anno['seq_name']
+        frame_id = anno['frame_id']
+        tf_map_vehicle = anno['tf_map_vehicle']
+        objects = anno['objects']
+        if len(objects) <= 0:
+            continue
+
+        objects_box_list = [object['box'] for object in objects]
+        objects_box = normlize_boxes(np.stack(objects_box_list, axis=0))
+
+        pcd = io.load(pcd_path, compress=True)
+        point_indices = points_in_box(pcd, objects_box)
+
+        for object_id in range(objects_box.shape[0]):
+            object_pcd = pcd[point_indices[:, object_id]]
+            object_data = (object_pcd, tf_map_vehicle)
+
+            object_name = objects[object_id]['name']
+            object_data_filename = f'{frame_id}-{object_name}.pkl'
+            pcd_path = os.path.join(seq_folder, object_data_filename)
+
+            io.dump(object_data, pcd_path, compress=True)
+
+
 def summary_gt_database(root_path, split, nsweep=2):
     r'''
     summary the gt database
@@ -112,8 +152,7 @@ def summary_gt_database(root_path, split, nsweep=2):
     object_info_dict = {0: [], 1: [], 2: [], 3: [], 4: []}
 
     for frame_name in tqdm(frame_name_list):
-        anno_path = os.path.join(anno_folder, frame_name)
-        anno = io.load(anno_path)
+        anno = io.load(os.path.join(anno_folder, frame_name))
         seq_id = anno['seq_name']
         frame_id = anno['frame_id']
         objects = anno['objects']
@@ -123,79 +162,23 @@ def summary_gt_database(root_path, split, nsweep=2):
         objects_box_list = [object['box'] for object in objects]
         objects_box = normlize_boxes(np.stack(objects_box_list, axis=0))
 
-        object_sweeps = {object['name']: [] for object in objects}
-        for sweep_id in range(nsweep):
-            sweep_frame_id = max(0, frame_id - sweep_id)
-            sweep_anno_path = os.path.join(anno_folder,
-                                           f'{seq_id}-{sweep_frame_id}.pkl')
-            sweep_anno = io.load(sweep_anno_path)
-            tf_map_vehicle = sweep_anno['tf_map_vehicle']
-
-            for object in objects:
-                object_name = object['name']
-                sweep_object_pcd_path = os.path.join(
-                    gt_database_folder, seq_id, f'{sweep_frame_id}-{object_name}.pkl')
-                if not os.path.exists(f'{sweep_object_pcd_path}.gz'):
-                    sweep_object_pcd_path = None
-                object_sweeps[object_name].append(
-                    dict(tf_map_vehicle=tf_map_vehicle, pcd_path=sweep_object_pcd_path))
-
-        for object_id, object in enumerate(objects):
-            box = objects_box[object_id]
+        for i, object in enumerate(objects):
             type = object['type']
-            name = object['name']
+            object_id = object['name']
             num_points = object['num_points']
-            sweeps = object_sweeps[name]
+            sweeps = dict(prefix=gt_database_folder, seq_id=seq_id, frame_id=frame_id, object_id=object_id)
 
-            object_info_dict[type].append(dict(box=box,
+            object_info_dict[type].append(dict(box=objects_box[i],
                                                type=type,
-                                               name=name,
                                                num_points=num_points,
                                                sweeps=sweeps,
-                                               seq_id=seq_id,
-                                               frame_id=frame_id,))
+                                               ))
 
     for type, info_list in object_info_dict.items():
         print(f'type {type}: {len(info_list)}')
 
     print('wait for writing data info...')
     io.dump(object_info_dict, os.path.join(root_path, f'{split}_info_gt.pkl'))
-
-
-def create_gt_database_one_seq(seq_item, root_path, split):
-    gt_database_folder = os.path.join(root_path, 'gt_database', split)
-
-    # make sequence folder
-    seq_id, seq_frame_list = seq_item
-    seq_folder = os.path.join(gt_database_folder, seq_id)
-    os.makedirs(seq_folder, exist_ok=True)
-
-    anno_folder = os.path.join(root_path, split, 'annos')
-    pcd_folder = os.path.join(root_path, split, 'pcds')
-
-    for i, frame_name in tqdm(enumerate(seq_frame_list)):
-        anno_path = os.path.join(anno_folder, frame_name)
-        pcd_path = os.path.join(pcd_folder, frame_name)
-
-        anno = io.load(anno_path)
-        seq_id = anno['seq_name']
-        frame_id = anno['frame_id']
-        objects = anno['objects']
-        if len(objects) <= 0:
-            continue
-
-        objects_box_list = [object['box'] for object in objects]
-        objects_box = normlize_boxes(np.stack(objects_box_list, axis=0))
-
-        pcd = io.load(pcd_path, compress=True)
-        point_indices = points_in_box(pcd, objects_box)
-
-        for object_id in range(objects_box.shape[0]):
-            object_name = objects[object_id]['name']
-            object_pcd = pcd[point_indices[:, object_id]]
-            object_pcd_filename = f'{frame_id}-{object_name}.pkl'
-            pcd_path = os.path.join(seq_folder, object_pcd_filename)
-            io.dump(object_pcd, pcd_path, compress=True)
 
 
 def sort_frame(frame_name_list):
@@ -207,6 +190,7 @@ def sort_frame(frame_name_list):
     seq_frame_list.sort()
 
     return [f'{p[0]}-{p[1]}.pkl' for p in seq_frame_list]
+
 
 
 def normlize_boxes(boxes):
