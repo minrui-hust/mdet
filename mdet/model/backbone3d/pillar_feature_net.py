@@ -9,6 +9,7 @@ from mdet.model import BaseModule
 from mdet.model.utils import construct_mask
 from mdet.ops.dense import dense
 from mdet.utils.factory import FI
+from mdet.utils.misc import is_nan_or_inf
 
 
 @FI.register
@@ -35,8 +36,8 @@ class PillarFeatureNet(BaseModule):
 
         self.voxel_reso = voxel_reso[:2]
         self.voxel_size = voxel_size[:2]
-        self.voxel_offset = (-point_range[0] + voxel_size[0]/2,
-                             -point_range[1] + voxel_size[1]/2)
+        self.voxel_offset = (point_range[0] + voxel_size[0]/2,
+                             point_range[1] + voxel_size[1]/2)
 
     def forward_train(self, voxelization_result):
         """Forward function.
@@ -90,7 +91,8 @@ class PillarFeatureNet(BaseModule):
             pillar_feature = pfn(pillar_feature, mask)
 
         # in shape [1, channels, W, H]
-        feature_image = dense(pillar_feature, coords, voxel_nums, self.voxel_reso).unsqueeze(0)
+        feature_image = dense(pillar_feature, coords,
+                              voxel_nums, self.voxel_reso).unsqueeze(0)
 
         return feature_image
 
@@ -98,9 +100,14 @@ class PillarFeatureNet(BaseModule):
         r'''
         Construct pillar from raw points in a voxel, invalid points has value of zero
         voxels: [max_pillar_num, max_point_num, point_dimension]
-        coords: [max_pillar_num, 4], in sample_id,z,y,x order
+        coords: [max_pillar_num, 4], in [sample_id],z,y,x order
         point_nums: [max_pillar_num]
         '''
+
+        if coords.shape[1] == 4:
+            coords = coords[:, [3, 2]]
+        else:
+            coords = coords[:, [2, 1]]
 
         position = voxels[..., :3]
         attribute = voxels[..., 3:]
@@ -120,7 +127,7 @@ class PillarFeatureNet(BaseModule):
                                           dtype=voxels.dtype, device=voxels.device)
                 voxel_offset = torch.tensor([self.voxel_offset[0], self.voxel_offset[1]],
                                             dtype=voxels.dtype, device=voxels.device)
-                pillar_center = coords[..., [-1, -2]].type_as(
+                pillar_center = coords.type_as(
                     voxels) * voxel_size + voxel_offset
                 center_offset = position[..., :2] - pillar_center.unsqueeze(-2)
                 feature_list.append(center_offset)
@@ -129,8 +136,10 @@ class PillarFeatureNet(BaseModule):
                 feature_list.append(distance)
             else:
                 raise NotImplementedError
-        # shape N x F x max_points
-        return torch.cat(feature_list, dim=-1).transpose(-1, -2)
+        voxels = torch.cat(feature_list, dim=-1)
+
+        # [N, point_num, feature_num] to [N, feature_num, point_num]
+        return voxels.transpose(-1, -2)
 
     def scatter(self, pillar_feature, coords, batch_size):
         r'''

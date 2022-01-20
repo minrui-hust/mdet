@@ -184,6 +184,7 @@ __global__ void GatherVoxelFromPoint( // clang-format off
 
     // loop utils list end or max_points reached
     int voxel_point_id = 0;
+    int valid_points = 0;
     while ((cur_point_global_id >= 0 || reduce_type == NONE) &&
            (voxel_point_id < max_points || max_points == 0)) {
       if (reduce_type == reduce_t::MEAN) {
@@ -213,14 +214,15 @@ __global__ void GatherVoxelFromPoint( // clang-format off
       }
 
       // move to next point
-      voxel_point_id++;
+      ++voxel_point_id;
       if (cur_point_global_id >= 0) {
         cur_point_global_id = point_nodes[cur_point_global_id].next;
+        ++valid_points;
       }
     }
 
     // record how many final point number in voxel
-    voxel_points[voxel_id] = min(voxel_point_id, max_points);
+    voxel_points[voxel_id] = min(valid_points, max_points);
   }
 
   // clip valid_voxel_num on thread 0
