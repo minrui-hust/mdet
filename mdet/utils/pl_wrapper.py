@@ -1,6 +1,7 @@
 import itertools
 import os
 import torch
+import math
 
 import pytorch_lightning as pl
 import torch.optim as optim
@@ -166,7 +167,7 @@ class PlWrapper(pl.LightningModule):
         # hack lr_scheduler config for specific lr_scheduler
         sched_interval = 'epoch'
         if sched_type_name == 'OneCycleLR':
-            sched_cfg['total_steps'] = int(len(self.train_dataloader(
+            sched_cfg['total_steps'] = math.ceil(len(self.train_dataloader(
             ))/self.config['ngpu']) * self.config['fit']['max_epochs']
             sched_interval = 'step'
 
