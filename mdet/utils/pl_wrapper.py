@@ -131,7 +131,6 @@ class PlWrapper(pl.LightningModule):
     def validation_epoch_end(self, step_output_list):
         # collate epoch_output
         sample_list = list(itertools.chain.from_iterable(step_output_list))
-        print(len(sample_list))
 
         # TODO: collate sample_list from other ddp rank
 
