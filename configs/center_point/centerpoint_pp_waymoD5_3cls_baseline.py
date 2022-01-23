@@ -100,14 +100,14 @@ codec_train = dict(
     ),
     loss_cfg=dict(
         head_weight={
-            'heatmap': 2.0,
-            'offset': 2.0,
-            'height': 1.0,
-            'size': 3.0,
-            'heading': 2.0,
+            'heatmap': 1.0,
+            'offset': 2 * 2.0,
+            'height': 1 * 2.0,
+            'size': 3 * 2.0,
+            'heading': 2 * 2.0,
         },
-        alpha=4.0,
-        beta=2.0,
+        alpha=2.0,
+        beta=4.0,
     ),
 )
 
@@ -141,7 +141,9 @@ dataloader_train = dict(
             dict(type='PcdObjectSampler', db_sampler=db_sampler),
             dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
             dict(type='PcdGlobalTransform',
-                 rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
+                 rot_range=[-0.78539816, 0.78539816],
+                 scale_range=[0.95, 1.05],
+                 translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', point_range=point_range),
             dict(type='PcdShuffler'),
         ],
@@ -183,7 +185,7 @@ data = dict(
 fit = dict(
     max_epochs=max_epochs,
     optimizer=dict(
-        type='Adam',
+        type='AdamW',
         weight_decay=0.01,
         betas=(0.9, 0.99),
     ),
