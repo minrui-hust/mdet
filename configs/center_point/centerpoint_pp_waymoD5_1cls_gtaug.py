@@ -8,7 +8,7 @@ lr_scale = GCFG['lr_scale'] or 1.0
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
-types = [('Vehicle', [1])]
+labels = [('Vehicle', [1])]
 
 point_range = [-75.52, -75.52, -2, 75.52, 75.52, 4.0]
 voxel_size = [0.32, 0.32, 6.0]
@@ -63,7 +63,7 @@ model_train = dict(
         shared_conv_channels=64,
         init_bias=-2.19,
         heads={
-            'heatmap': (len(types), 2),
+            'heatmap': (len(labels), 2),
             'offset': (2, 2),
             'height': (1, 2),
             'size': (3, 2),
@@ -88,6 +88,7 @@ codec_train = dict(
         grid_reso=out_grid_reso,
         min_gaussian_radius=2,
         min_gaussian_overlap=0.1,
+        labels=labels,
     ),
     decode_cfg=dict(
         nms_cfg=dict(
@@ -120,7 +121,7 @@ db_sampler = dict(
     type='GroundTruthSampler',
     info_path=f'{dataset_root}/training_info_gt.pkl',
     sample_groups={'Vehicle': 20},
-    labels=types,
+    labels=labels,
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
     filter=dict(type='FilterByNumpoints', min_num_points=10),
 )
@@ -133,7 +134,7 @@ dataloader_train = dict(
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path=f'{dataset_root}/training_info.pkl',
-        load_opt=dict(load_dim=point_dim, nsweep=1, types=types,),
+        load_opt=dict(load_dim=point_dim, nsweep=1, labels=labels,),
         transforms=[
             dict(type='PcdIntensityNormlizer'),
             dict(type='PcdObjectSampler', db_sampler=db_sampler),

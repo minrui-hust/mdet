@@ -137,8 +137,7 @@ class MDet3dDataset(MDetDataset):
         if show_anno and 'anno' in sample:
             box_color = self.TypePalette[sample['anno'].types %
                                          self.TypePalette.shape[0]]
-            box_label = [sample['meta']['type_name'][type_id]
-                         for type_id in sample['anno'].types]
+            box_label = [str(type_id) for type_id in sample['anno'].types]
             vis.add_box(sample['anno'].boxes,
                         box_color=box_color, box_label=None, prefix='anno')
 
@@ -146,8 +145,7 @@ class MDet3dDataset(MDetDataset):
             mask = sample['pred'].scores > 0.3
             box_color = self.TypePalette[(sample['pred'].types+1) %
                                          self.TypePalette.shape[0]]
-            box_label = [sample['meta']['type_name'][type_id]
-                         for type_id in sample['pred'].types]
+            box_label = [str(type_id) for type_id in sample['pred'].types]
             vis.add_box(sample['pred'].boxes[mask],
                         box_color=box_color[mask], box_label=None, prefix='pred')
 

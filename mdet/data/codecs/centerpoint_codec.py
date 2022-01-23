@@ -39,6 +39,19 @@ class CenterPointCodec(BaseCodec):
         self.min_gaussian_radius = self.encode_cfg['min_gaussian_radius']
         self.min_gaussian_overlap = self.encode_cfg['min_gaussian_overlap']
 
+        # many raw type may map to same label
+        self.type_to_label = {}
+        self.label_to_type = {}
+        self.label_to_name = {}
+        self.name_to_label = {}
+        for label, (name, type_list) in enumerate(encode_cfg['labels']):
+            self.label_to_name[label] = name
+            self.name_to_label[name] = label
+            for type in type_list:
+                self.type_to_label[type] = label
+                # this may loss information, only record last type
+                self.label_to_type[label] = type
+
         # for decode
         # TODO
 
@@ -55,7 +68,9 @@ class CenterPointCodec(BaseCodec):
     def encode_anno(self, sample, info):
         boxes = sample['anno'].boxes
         types = sample['anno'].types
-        type_num = len(sample['meta']['type_name'])
+        label_num = len(self.label_to_name)
+        labels = np.array([self.type_to_label[type]
+                          for type in types], dtype=np.int32)
 
         # offset
         cords_x = np.floor(
@@ -73,7 +88,7 @@ class CenterPointCodec(BaseCodec):
             (cords_y, cords_x), axis=-1).astype(np.int32)
 
         positive_heatmap_indices = np.stack(
-            (types, cords_y, cords_x), axis=-1).astype(np.int32)
+            (labels, cords_y, cords_x), axis=-1).astype(np.int32)
 
         # height
         height = boxes[:, [2]]
@@ -86,10 +101,10 @@ class CenterPointCodec(BaseCodec):
 
         # heatmap
         heatmap = np.zeros(
-            (type_num, self.grid_reso[1], self.grid_reso[0]), dtype=np.float32)
+            (label_num, self.grid_reso[1], self.grid_reso[0]), dtype=np.float32)
         for i in range(len(boxes)):
             box = boxes[i]
-            type = types[i]
+            label = labels[i]
             center = cords[i]
 
             # skip object out of bound
@@ -100,7 +115,7 @@ class CenterPointCodec(BaseCodec):
             l, w = box[3] / self.grid_size[0], box[4] / self.grid_size[1]
             radius = gaussian_radius((l, w), self.min_gaussian_overlap)
             radius = max(self.min_gaussian_radius, int(radius))
-            draw_gaussian(heatmap[type], center, radius)
+            draw_gaussian(heatmap[label], center, radius)
 
         sample['gt'] = dict(offset=torch.from_numpy(offset),
                             height=torch.from_numpy(height),
@@ -161,10 +176,12 @@ class CenterPointCodec(BaseCodec):
             if not infer:
                 valid_indices = keep_indices[:valid_num]
                 det_box = topk_boxes[i][valid_indices]
-                det_label = topk_label[i][valid_indices]
+                det_label = topk_label[i][valid_indices].cpu().numpy()
                 det_score = topk_score[i][valid_indices]
+                det_type = np.array([self.label_to_type[label]
+                                    for label in det_label], dtype=np.int32)
                 pred = Annotation3d(boxes=det_box.cpu().numpy(
-                ), types=det_label.cpu().numpy(), scores=det_score.cpu().numpy())
+                ), types=det_type, scores=det_score.cpu().numpy())
             else:
                 det_box = topk_boxes[i][keep_indices]
                 det_label = topk_label[i][keep_indices]
@@ -258,55 +275,58 @@ class CenterPointCodec(BaseCodec):
         import matplotlib.pyplot as plt
 
         fig = plt.figure()
-        ax = fig.add_subplot(111, aspect='equal')
 
-        if show_pcd:
-            pcd = sample['input']['pcd']
-            ax.scatter(pcd[:, 0], pcd[:, 1], c='black',
-                       marker='.', alpha=0.7, s=1)
+        TypePalette = ['red', 'green', 'blue']
 
-        if show_heatmap_gt:
-            heatmap = sample['gt']['heatmap']
-            heatmap = torch.max(heatmap, dim=0)[0]
-            heatmap = torch.sigmoid(heatmap)
-            x = self.point_range[0] + self.grid_size[0] * \
-                np.arange(self.grid_reso[0])
-            y = self.point_range[1] + self.grid_size[1] * \
-                np.arange(self.grid_reso[1])
-            ax.pcolormesh(x, y, heatmap, cmap='hot', alpha=0.6)
+        type_num = sample['gt']['heatmap'].shape[0]
+        for label in range(type_num):
+            ax = fig.add_subplot(1, type_num, label+1, aspect='equal')
 
-        if show_heatmap_pred:
-            heatmap = sample['output']['heatmap']
-            heatmap = torch.max(heatmap, dim=0)[0]
-            heatmap = torch.sigmoid(heatmap)
-            x = self.point_range[0] + self.grid_size[0] * \
-                np.arange(self.grid_reso[0])
-            y = self.point_range[1] + self.grid_size[1] * \
-                np.arange(self.grid_reso[1])
-            ax.pcolormesh(x, y, heatmap, cmap='hot', alpha=0.6)
+            if show_pcd:
+                pcd = sample['input']['pcd']
+                ax.scatter(pcd[:, 0], pcd[:, 1], c='black',
+                           marker='.', alpha=0.7, s=1)
 
-        if show_box:
-            positive_indices = sample['gt']['positive_indices']
-            cord = torch.stack(
-                [positive_indices[:, 1], positive_indices[:, 0]], dim=-1)
-            grid_offset = self.point_range[:2] + self.grid_size[:2]/2
-            center = cord * self.grid_size[:2] + grid_offset
-            offset = sample['gt']['offset']
-            size = sample['gt']['size']
-            cos_rot = sample['gt']['heading'][:, 0]
-            sin_rot = sample['gt']['heading'][:, 1]
-            rot = torch.atan2(sin_rot, cos_rot) * 180 / math.pi
-            l = torch.exp(size[:, 0])
-            w = torch.exp(size[:, 1])
-            dx = (l*cos_rot - w*sin_rot)/2
-            dy = (l*sin_rot + w*cos_rot)/2
-            pos = center + offset - torch.stack([dx, dy], dim=-1)
-            for i in range(len(pos)):
-                rect = Rectangle(
-                    (pos[i, 0].item(), pos[i, 1].item()), l[i].item(), w[i].item(), angle=rot[i], linewidth=1, edgecolor='r', facecolor='none')
-                ax.add_patch(rect)
+            if show_heatmap_gt:
+                heatmap = sample['gt']['heatmap'][label]
+                heatmap = torch.sigmoid(heatmap)
+                x = self.point_range[0] + self.grid_size[0] * \
+                    np.arange(self.grid_reso[0]+1)
+                y = self.point_range[1] + self.grid_size[1] * \
+                    np.arange(self.grid_reso[1]+1)
+                ax.pcolormesh(x, y, heatmap, cmap='hot', alpha=0.6)
 
-        plt.axis('equal')
+            if show_heatmap_pred:
+                heatmap = sample['output']['heatmap'][label]
+                heatmap = torch.sigmoid(heatmap)
+                x = self.point_range[0] + self.grid_size[0] * \
+                    np.arange(self.grid_reso[0]+1)
+                y = self.point_range[1] + self.grid_size[1] * \
+                    np.arange(self.grid_reso[1]+1)
+                ax.pcolormesh(x, y, heatmap, cmap='hot', alpha=0.6)
+
+            if show_box:
+                positive_indices = sample['gt']['positive_indices']
+                positive_labels = sample['gt']['positive_heatmap_indices'][:, 0]
+                cord = torch.stack(
+                    [positive_indices[:, 1], positive_indices[:, 0]], dim=-1)
+                grid_offset = self.point_range[:2] + self.grid_size[:2]/2
+                center = cord * self.grid_size[:2] + grid_offset
+                offset = sample['gt']['offset']
+                size = sample['gt']['size']
+                cos_rot = sample['gt']['heading'][:, 0]
+                sin_rot = sample['gt']['heading'][:, 1]
+                rot = torch.atan2(sin_rot, cos_rot) * 180 / math.pi
+                l = torch.exp(size[:, 0])
+                w = torch.exp(size[:, 1])
+                dx = (l*cos_rot - w*sin_rot)/2
+                dy = (l*sin_rot + w*cos_rot)/2
+                pos = center + offset - torch.stack([dx, dy], dim=-1)
+                for i in range(len(pos)):
+                    rect = Rectangle(
+                        (pos[i, 0].item(), pos[i, 1].item()), l[i].item(), w[i].item(), angle=rot[i], linewidth=1, edgecolor=TypePalette[positive_labels[i] % len(TypePalette)], facecolor='none')
+                    ax.add_patch(rect)
+
         plt.show()
 
     def safe_sigmoid(self, x):

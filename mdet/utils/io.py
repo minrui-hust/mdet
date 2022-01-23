@@ -104,6 +104,26 @@ class PickleHandler(BaseFileHandler):
         super().dump_to_path(obj, filepath, mode='wb', **kwargs)
 
 
+@register_handler(['pb2', 'pb3', 'pb'])
+class ProtoHandler(BaseFileHandler):
+    def load_from_fileobj(self, file, **kwargs):
+        pb = kwargs['Proto']()
+        pb.ParseFromString(file.read())
+        return pb
+
+    def load_from_path(self, filepath, **kwargs):
+        return super().load_from_path(filepath, mode='rb', **kwargs)
+
+    def dump_to_fileobj(self, obj, file, **kwargs):
+        file.write(obj.SerializeToString())
+
+    def dump_to_path(self, obj, filepath, **kwargs):
+        super().dump_to_path(obj, filepath, mode='wb', **kwargs)
+
+    def dump_to_str(self, obj, **kwargs):
+        return obj.SerializeToString()
+
+
 def load(file, format=None, **kwargs):
     """Load data from json/yaml/pickle files.
 

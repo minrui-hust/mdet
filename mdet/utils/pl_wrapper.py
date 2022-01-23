@@ -1,15 +1,15 @@
 import itertools
-import os
-import torch
 import math
-
-import pytorch_lightning as pl
-import torch.optim as optim
-from torch.utils.data.dataloader import DataLoader
+import os
+import tempfile
 
 from mdet.data.sample import Sample
 from mdet.utils.factory import FI
 import mdet.utils.io as io
+import pytorch_lightning as pl
+import torch
+import torch.optim as optim
+from torch.utils.data.dataloader import DataLoader
 
 
 class PlWrapper(pl.LightningModule):
@@ -62,6 +62,8 @@ class PlWrapper(pl.LightningModule):
         if self.eval_evaluate:
             self.eval_interest_set |= {'anno', 'pred'}
             self.eval_epoch_interest_set |= {'anno', 'pred'}
+        self.formatted_path = config['runtime']['eval'].get(
+            'formatted_path', None)
 
     def forward(self, *input):
         # forward is used for export
@@ -126,17 +128,33 @@ class PlWrapper(pl.LightningModule):
 
     def validation_epoch_end(self, step_output_list):
         # collate epoch_output
-        sample_list = itertools.chain.from_iterable(step_output_list)
+        sample_list = list(itertools.chain.from_iterable(step_output_list))
+
+        # TODO: collate sample_list from other ddp rank
 
         # epoch callback
         if self.eval_epoch_hook is not None:
             self.eval_epoch_hook(sample_list, self)
 
-        # format and evaluation
+        # format
+        gt_path = None
+        pred_path = self.formatted_path
         if self.eval_evaluate:
-            pred_path, anno_path = self.eval_dataset.format(sample_list)
-            metric = self.eval_dataset.evaluate(pred_path, anno_path)
+            _, gt_path = tempfile.mkstemp(suffix='.pb2', prefix='mdet_gt_')
+            if pred_path is None:
+                _, pred_path = tempfile.mkstemp(
+                    suffix='.pb2', prefix='mdet_pred_')
+        pred_path, gt_path = self.eval_dataset.format(
+            sample_list, pred_path=pred_path, gt_path=gt_path)
+
+        # evaluation
+        if self.eval_evaluate:
+            metric = self.eval_dataset.evaluate(pred_path, gt_path)
             self.log_dict(metric)
+
+            os.unlink(gt_path)
+            if self.formatted_path is None:
+                os.unlink(pred_path)
 
     def train_dataloader(self):
         dataloader_cfg = self.config['data']['train'].copy()

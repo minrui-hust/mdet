@@ -1,11 +1,19 @@
+import math
+import math
+import os
+import tempfile
+
 import numpy as np
-from mdet.utils.factory import FI
-from mdet.data.datasets.base_dataset import MDet3dDataset
-import mdet.utils.io as io
-import mdet.utils.rigid as rigid
+from tqdm import tqdm
+from waymo_open_dataset import label_pb2
+from waymo_open_dataset.protos import metrics_pb2
+
 from mdet.core.annotation import Annotation3d
 from mdet.core.pointcloud import Pointcloud
-import os
+from mdet.data.datasets.base_dataset import MDet3dDataset
+from mdet.utils.factory import FI
+import mdet.utils.io as io
+import mdet.utils.rigid as rigid
 
 
 @FI.register
@@ -19,13 +27,12 @@ class WaymoDet3dDataset(MDet3dDataset):
         super().__init__(info_path, transforms, codec, filter)
         self.load_opt = load_opt
 
-        self.type_raw_to_task = {}
-        self.type_id_to_name = []
-        for task_specific_type, (type_name, raw_type_list) in enumerate(
-                load_opt['types']):
-            self.type_id_to_name.append(type_name)
-            for raw_type in raw_type_list:
-                self.type_raw_to_task[raw_type] = task_specific_type
+        self.labels_name = {}
+        self.interest_types = set()
+        for label, (name, type_list) in enumerate(load_opt['labels']):
+            self.labels_name[label] = name
+            for type in type_list:
+                self.interest_types.add(type)
 
         self.pcd_loader = WaymoNSweepLoader(
             load_opt['load_dim'], load_opt['nsweep'])
@@ -34,10 +41,12 @@ class WaymoDet3dDataset(MDet3dDataset):
         anno = io.load(info['anno_path'])
         frame_id = anno['frame_id']
         seq_name = anno['seq_name']
+        stamp = anno['timestamp']
         sample_name = f'{seq_name}-{frame_id}'
 
         # update sample's meta
-        sample['meta'] = dict(sample_name=sample_name)
+        sample['meta'] = dict(seq_name=seq_name, frame_id=frame_id,
+                              stamp=stamp, labels_name=self.labels_name)
 
     def load_data(self, sample, info):
         # load pcd
@@ -54,17 +63,9 @@ class WaymoDet3dDataset(MDet3dDataset):
         num_points = np.empty((0, ), dtype=np.int32)
         box_list, type_list, num_points_list = [], [], []
         for object in anno['objects']:
-            raw_type = object['type']
-            if raw_type in self.type_raw_to_task:
-                raw_box = object['box']
-                box_center = raw_box[:3]
-                box_extend = raw_box[3:6] / 2
-                box_rotation = np.concatenate(
-                    [np.cos(raw_box[[6]]),
-                     np.sin(raw_box[[6]])])
-                box = np.concatenate([box_center, box_extend, box_rotation])
-                box_list.append(box)
-                type_list.append(self.type_raw_to_task[raw_type])
+            if object['type'] in self.interest_types:
+                box_list.append(self._normlize_box(object['box']))
+                type_list.append(object['type'])
                 num_points_list.append(object['num_points'])
         if len(box_list) > 0:
             boxes = np.stack(box_list, axis=0)
@@ -75,20 +76,114 @@ class WaymoDet3dDataset(MDet3dDataset):
         sample['anno'] = Annotation3d(boxes=boxes,
                                       types=types,
                                       num_points=num_points)
-        sample['meta']['type_name'] = self.type_id_to_name
 
-    def format(self, output, pred_path=None, gt_path=None):
+    def format(self, sample_list, pred_path=None, gt_path=None):
         r'''
         format output to dataset specific format for submission and evaluation.
         if output_path is None, a tmp file will be used
+        Args:
+            sample_list: sample list to format, must contains 'anno', 'pred', 'meta'
         '''
+        if not (pred_path is None and gt_path is None):
+            meta_list = [sample['meta'] for sample in sample_list]
+
+        # process prediction
+        if pred_path is not None:
+            print('Formatting predictions...')
+            pred_list = [sample['pred'] for sample in sample_list]
+            pred_pb = self._format_anno_list(pred_list, meta_list)
+            io.dump(pred_pb, pred_path)
+            print(f'Save formatted predictions into {pred_path}')
+
+        # process anno
+        if gt_path is not None:
+            print('Formatting groundtruth...')
+            gt_list = [sample['anno'] for sample in sample_list]
+            gt_pb = self._format_anno_list(gt_list, meta_list)
+            io.dump(gt_pb, gt_path)
+            print(f'Save formatted groundtruth into {gt_path}')
+
         return pred_path, gt_path
 
     def evaluate(self, pred_path, gt_path):
         r'''
         evaluate metrics
         '''
+        import subprocess
+        ret_bytes = subprocess.check_output(
+            f'mdet/data/datasets/waymo_det3d/compute_detection_metrics_main {pred_path} {gt_path}', shell=True)
+        ret_texts = ret_bytes.decode('utf-8')
+        print(ret_texts)
+
         return {'accuracy': 0.0}
+
+    def _format_anno_list(self, anno_list, meta_list):
+        r'''
+        format Annotation3d into dataset specific format for evaluation and submission
+        Args:
+            anno: the annotation in Annotation3d format
+            meta: sample meta
+        Return:
+            pb object
+        '''
+        objects = metrics_pb2.Objects()
+        for anno, meta in tqdm(zip(anno_list, meta_list)):
+            det_boxes = anno.boxes
+            det_types = anno.types
+            det_scores = anno.scores
+            det_num_points = anno.num_points
+            for i in range(len(det_boxes)):
+                o = metrics_pb2.Object()
+
+                # The following 3 fields are used to uniquely identify a frame a prediction
+                # is predicted at. Make sure you set them to values exactly the same as what
+                # we provided in the raw data. Otherwise your prediction is considered as a
+                # false negative.
+                o.context_name = meta['seq_name']
+
+                # The frame timestamp for the prediction. See Frame::timestamp_micros in
+                # dataset.proto.
+                o.frame_timestamp_micros = meta['stamp']
+
+                # This is only needed for 2D detection or tracking tasks.
+                # Set it to the camera name the prediction is for.
+                #  o.camera_name = dataset_pb2.CameraName.FRONT
+
+                # Populating box and score.
+                box = label_pb2.Label.Box()
+                box.center_x = det_boxes[i][0]
+                box.center_y = det_boxes[i][1]
+                box.center_z = det_boxes[i][2]
+                box.length = det_boxes[i][3]*2
+                box.width = det_boxes[i][4]*2
+                box.height = det_boxes[i][5]*2
+                box.heading = math.atan2(det_boxes[i][7], det_boxes[i][6])
+                o.object.box.CopyFrom(box)
+
+                # This must be within [0.0, 1.0]. It is better to filter those boxes with
+                # small scores to speed up metrics computation.
+                o.score = det_scores[i]
+
+                # For tracking, this must be set and it must be unique for each tracked
+                # sequence.
+                #  o.object.id = 'unique object tracking ID'
+
+                # Use correct type.
+                o.object.type = det_types[i]
+
+                # This is used for gt
+                o.object.num_lidar_points_in_box = det_num_points[i]
+
+                objects.objects.append(o)
+        return objects
+
+    def _normlize_box(self, raw_box):
+        box = np.empty(8, dtype=np.float32)
+        box[:3] = raw_box[:3]
+        box[3:6] = raw_box[3:6] / 2
+        box[6] = math.cos(raw_box[6])
+        box[7] = math.sin(raw_box[6])
+        return box
 
 
 @FI.register
@@ -143,16 +238,18 @@ class WaymoObjectNSweepLoader(object):
         '''
         assert(self.nsweep > 0)
 
-        prefix, seq_id, frame_id, object_id = sweeps['prefix'],sweeps['seq_id'],sweeps['frame_id'],sweeps['object_id']
+        prefix, seq_id, frame_id, object_id = sweeps['prefix'], sweeps[
+            'seq_id'], sweeps['frame_id'], sweeps['object_id']
 
         pcd_list = []
         tf_map_vehicle0 = None
         for sweep_id in range(self.nsweep):
             sweep_frame_id = max(0, frame_id-sweep_id)
-            sweep_data_path = os.path.join(prefix, seq_id, f'{sweep_frame_id}-{object_id}.pkl')
+            sweep_data_path = os.path.join(
+                prefix, seq_id, f'{sweep_frame_id}-{object_id}.pkl')
 
             if not os.path.exists(f'{sweep_data_path}.gz'):
-                assert(sweep_id>0)
+                assert(sweep_id > 0)
                 continue
 
             pcd, tf_map_vehicle = io.load(sweep_data_path, compress=True)
@@ -168,4 +265,3 @@ class WaymoObjectNSweepLoader(object):
         points = np.concatenate(pcd_list, axis=0)
 
         return Pointcloud(points=points[:, :self.load_dim])
-

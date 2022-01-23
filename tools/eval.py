@@ -36,6 +36,8 @@ def parse_args():
     parser.add_argument(
         '--store_pred', help='output folder to store predictions(after postprocess)')
     parser.add_argument(
+        '--store_formatted', help='output folder to store formatted predictions(after postprocess)')
+    parser.add_argument(
         '--store_output', help='output folder to store raw predictions(before postprocess)')
     parser.add_argument('--show_output', action='store_true',
                         help='whether show model output')
@@ -75,15 +77,22 @@ def main(args):
     config['data'][args.split]['shuffle'] = False
     config['runtime']['eval']['log_loss'] = args.evaluate_loss
     config['runtime']['eval']['evaluate'] = args.evaluate
+    config['runtime']['eval']['formatted_path'] = args.store_formatted
 
     interest_set = set()
     epoch_interest_set = set()
-    if args.store_pred is not None:
+    if (args.store_pred is not None) or (args.store_formatted is not None):
+        # interest_set must be super set of epoch_interest_set
         interest_set |= {'pred', 'meta'}
         epoch_interest_set |= {'pred', 'meta'}
     if args.store_output is not None:
+        # interest_set must be super set of epoch_interest_set
         interest_set |= {'output', 'meta'}
-        epoch_interest_set |= {'ourput', 'meta'}
+        epoch_interest_set |= {'output', 'meta'}
+    if args.evaluate:
+        # interest_set must be super set of epoch_interest_set
+        interest_set |= {'pred', 'anno', 'meta'}
+        epoch_interest_set |= {'anno', 'pred', 'meta'}
     if args.show_output:
         interest_set |= {'output', 'gt', 'input', 'meta'}
         print(f'show_output_args:\n{args.show_output_args}')

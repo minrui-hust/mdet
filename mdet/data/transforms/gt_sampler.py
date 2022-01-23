@@ -130,8 +130,7 @@ class GroundTruthSampler(object):
 
         sampled_points_list = [self.pcd_loader(
             info['sweeps']).points for info in samples]
-        sampled_type_list = [
-            self.labelname2id[self.type2label[info['type']]] for info in samples]
+        sampled_type_list = [info['type'] for info in samples]
         sampled_num_points_list = [info['num_points'] for info in samples]
 
         if len(sampled_box_list) > 0:
