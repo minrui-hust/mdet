@@ -2,20 +2,20 @@ from copy import deepcopy as _deepcopy
 from mdet.utils.global_config import GCFG
 
 # global config maybe override by command line
-batch_size = GCFG['batch_size'] or 2
-max_epochs = GCFG['max_epochs'] or 32
-lr_scale = GCFG['lr_scale'] or 1.0
+batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
+max_epochs = GCFG['max_epochs'] or 36
+lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
-labels = [('Vehicle', [1])]
+labels = [('Vehicle', [1]), ('Cyclist', [4]), ('Pedestrian', [2])]
 
-point_range = [-75.52, -75.52, -2, 75.52, 75.52, 4.0]
+point_range = [-74.88, -74.88, -2, 74.88, 74.88, 4.0]
 voxel_size = [0.32, 0.32, 6.0]
-voxel_reso = [472, 472, 1]
+voxel_reso = [468, 468, 1]
 
-out_grid_size = [0.64, 0.64]
-out_grid_reso = [236, 236]
+out_grid_size = [0.32, 0.32]
+out_grid_reso = [468, 468]
 
 point_dim = 5
 
@@ -27,7 +27,7 @@ model_train = dict(
         point_range=point_range,
         voxel_size=voxel_size,
         voxel_reso=voxel_reso,
-        max_points=32,
+        max_points=20,
         max_voxels=32000,
     ),
     backbone3d=dict(
@@ -42,12 +42,12 @@ model_train = dict(
         voxel_reso=voxel_reso,
         voxel_size=voxel_size,
         point_range=point_range,
-        pfn_channels=[64, ],
+        pfn_channels=[64, 64, ],
     ),
     backbone2d=dict(
         type='SECOND',
         layer_nums=[3, 5, 5],
-        layer_strides=[2, 2, 2],
+        layer_strides=[1, 2, 2],
         out_channels=[64, 128, 256],
         in_channels=64,
     ),
@@ -73,6 +73,7 @@ model_train = dict(
 )
 
 model_eval = _deepcopy(model_train)
+model_eval['voxelization']['max_voxels'] = 60000
 
 model_infer = _deepcopy(model_train)
 
@@ -92,9 +93,9 @@ codec_train = dict(
     ),
     decode_cfg=dict(
         nms_cfg=dict(
-            pre_num=1024,
-            post_num=256,
-            overlap_thresh=0.1,
+            pre_num=4096,
+            post_num=500,
+            overlap_thresh=0.7,
         ),
     ),
     loss_cfg=dict(
@@ -120,10 +121,10 @@ codec_infer['encode_cfg']['encode_anno'] = False
 db_sampler = dict(
     type='GroundTruthSampler',
     info_path=f'{dataset_root}/training_info_gt.pkl',
-    sample_groups={'Vehicle': 20},
+    sample_groups={'Vehicle': 15, 'Cyclist': 10, 'Pedestrian': 10},
     labels=labels,
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
-    filter=dict(type='FilterByNumpoints', min_num_points=10),
+    filter=dict(type='FilterByNumpoints', min_num_points=5),
 )
 
 dataloader_train = dict(
@@ -137,9 +138,10 @@ dataloader_train = dict(
         load_opt=dict(load_dim=point_dim, nsweep=1, labels=labels,),
         transforms=[
             dict(type='PcdIntensityNormlizer'),
-            #  dict(type='PcdObjectSampler', db_sampler=db_sampler),
-            #  dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
-            #  dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
+            dict(type='PcdObjectSampler', db_sampler=db_sampler),
+            dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
+            dict(type='PcdGlobalTransform',
+                 rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
             dict(type='PcdRangeFilter', point_range=point_range),
             dict(type='PcdShuffler'),
         ],
@@ -181,13 +183,13 @@ data = dict(
 fit = dict(
     max_epochs=max_epochs,
     optimizer=dict(
-        type='AdamW',
+        type='Adam',
         weight_decay=0.01,
         betas=(0.9, 0.99),
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.001 / 16 * batch_size * lr_scale,
+        max_lr=0.003 / 4 * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,

@@ -60,10 +60,12 @@ class PlWrapper(pl.LightningModule):
         self.eval_epoch_hook = config['runtime']['eval'].get(
             'epoch_hook', None)
         if self.eval_evaluate:
-            self.eval_interest_set |= {'anno', 'pred'}
-            self.eval_epoch_interest_set |= {'anno', 'pred'}
+            self.eval_interest_set |= {'anno', 'pred', 'meta'}
+            self.eval_epoch_interest_set |= {'anno', 'pred', 'meta'}
         self.formatted_path = config['runtime']['eval'].get(
             'formatted_path', None)
+        self.evaluate_min_epoch = config['runtime']['eval'].get(
+            'evaluate_min_epoch', 0)
 
     def forward(self, *input):
         # forward is used for export
@@ -129,6 +131,7 @@ class PlWrapper(pl.LightningModule):
     def validation_epoch_end(self, step_output_list):
         # collate epoch_output
         sample_list = list(itertools.chain.from_iterable(step_output_list))
+        print(len(sample_list))
 
         # TODO: collate sample_list from other ddp rank
 
@@ -139,7 +142,7 @@ class PlWrapper(pl.LightningModule):
         # format
         gt_path = None
         pred_path = self.formatted_path
-        if self.eval_evaluate:
+        if self.eval_evaluate and self.current_epoch >= self.evaluate_min_epoch:
             _, gt_path = tempfile.mkstemp(suffix='.pb2', prefix='mdet_gt_')
             if pred_path is None:
                 _, pred_path = tempfile.mkstemp(
@@ -148,7 +151,7 @@ class PlWrapper(pl.LightningModule):
             sample_list, pred_path=pred_path, gt_path=gt_path)
 
         # evaluation
-        if self.eval_evaluate:
+        if self.eval_evaluate and self.current_epoch >= self.evaluate_min_epoch:
             metric = self.eval_dataset.evaluate(pred_path, gt_path)
             self.log_dict(metric)
 

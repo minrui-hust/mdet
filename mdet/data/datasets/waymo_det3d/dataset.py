@@ -115,7 +115,53 @@ class WaymoDet3dDataset(MDet3dDataset):
         ret_texts = ret_bytes.decode('utf-8')
         print(ret_texts)
 
-        return {'accuracy': 0.0}
+        # parse the text to get ap_dict
+        ap_dict = {
+            'Vehicle/L1 mAP': 0.0,
+            'Vehicle/L1 mAPH': 0.0,
+            'Vehicle/L2 mAP': 0.0,
+            'Vehicle/L2 mAPH': 0.0,
+            'Pedestrian/L1 mAP': 0.0,
+            'Pedestrian/L1 mAPH': 0.0,
+            'Pedestrian/L2 mAP': 0.0,
+            'Pedestrian/L2 mAPH': 0.0,
+            'Sign/L1 mAP': 0.0,
+            'Sign/L1 mAPH': 0.0,
+            'Sign/L2 mAP': 0.0,
+            'Sign/L2 mAPH': 0.0,
+            'Cyclist/L1 mAP': 0.0,
+            'Cyclist/L1 mAPH': 0.0,
+            'Cyclist/L2 mAP': 0.0,
+            'Cyclist/L2 mAPH': 0.0,
+            'Overall/L1 mAP': 0.0,
+            'Overall/L1 mAPH': 0.0,
+            'Overall/L2 mAP': 0.0,
+            'Overall/L2 mAPH': 0.0,
+        }
+        mAP_splits = ret_texts.split('mAP ')
+        mAPH_splits = ret_texts.split('mAPH ')
+        for idx, key in enumerate(ap_dict.keys()):
+            split_idx = int(idx / 2) + 1
+            if idx % 2 == 0:  # mAP
+                ap_dict[key] = float(mAP_splits[split_idx].split(']')[0])
+            else:  # mAPH
+                ap_dict[key] = float(mAPH_splits[split_idx].split(']')[0])
+        ap_dict['Overall/L1 mAP'] = (ap_dict['Vehicle/L1 mAP'] +
+                                     ap_dict['Pedestrian/L1 mAP'] + ap_dict['Cyclist/L1 mAP']) / 3
+        ap_dict['Overall/L1 mAPH'] = (ap_dict['Vehicle/L1 mAPH'] + ap_dict['Pedestrian/L1 mAPH'] +
+                                      ap_dict['Cyclist/L1 mAPH']) / 3
+        ap_dict['Overall/L2 mAP'] = (ap_dict['Vehicle/L2 mAP'] + ap_dict['Pedestrian/L2 mAP'] +
+                                     ap_dict['Cyclist/L2 mAP']) / 3
+        ap_dict['Overall/L2 mAPH'] = (ap_dict['Vehicle/L2 mAPH'] + ap_dict['Pedestrian/L2 mAPH'] +
+                                      ap_dict['Cyclist/L2 mAPH']) / 3
+
+        # do not care about sign
+        ap_dict.pop('Sign/L1 mAP')
+        ap_dict.pop('Sign/L1 mAPH')
+        ap_dict.pop('Sign/L2 mAP')
+        ap_dict.pop('Sign/L2 mAPH')
+
+        return ap_dict
 
     def _format_anno_list(self, anno_list, meta_list):
         r'''

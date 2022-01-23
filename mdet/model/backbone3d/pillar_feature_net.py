@@ -63,11 +63,12 @@ class PillarFeatureNet(BaseModule):
         # construct pillar feature from raw points
         with record_function("construct_pillar"):
             pillar_feature = self.construct_pillar(voxels, coords, point_nums)
+        is_nan_or_inf(pillar_feature, 'pillar_feature.pre')
 
         # pass through pfn layers
         with record_function("pillar_pfn"):
             mask = construct_mask(point_nums, voxels.size(-2), inverse=True)
-            for pfn in self.pfn_layers:
+            for i, pfn in enumerate(self.pfn_layers):
                 pillar_feature = pfn(pillar_feature, mask)
 
         # in shape [batch, W, H, channels]
@@ -208,15 +209,16 @@ class PFNLayerBN(nn.Module):
 
         self.linear = nn.Conv1d(
             self.in_channels, self.hidden_channels, 1, bias=False)
-        self.norm = nn.BatchNorm1d(self.hidden_channels)
+        self.norm = nn.BatchNorm1d(
+            self.hidden_channels, eps=1e-3, momentum=0.01)
 
     def forward(self, x, mask=None):
+        if mask is not None:  # mask is N x max_points, unsqueeze to N x 1 x max_points
+            x = x.masked_fill(mask.unsqueeze(-2), 0)
+
         x = self.linear(x)
         x = self.norm(x)
         x = F.relu(x, inplace=True)
-
-        if mask is not None:  # mask is N x max_points, unsqueeze to N x 1 x max_points
-            x = x.masked_fill(mask.unsqueeze(-2), float('-inf'))
 
         # x.shape N x C x max_points
         x_max = torch.max(x, dim=-1, keepdim=True)[0]

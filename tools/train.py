@@ -44,6 +44,8 @@ def parse_args():
                         help='disable auto scale learning rate according to gpu number')
     parser.add_argument('--dataset_root', type=str,
                         help='the dataset root folder, this will override config')
+    parser.add_argument('--batch_size', type=int,
+                        help='override batch in config')
     return parser.parse_args()
 
 
@@ -60,6 +62,10 @@ def main(args):
     if args.dataset_root:
         print(f'INFO: override dataset_root to {args.dataset_root}')
         GCFG['dataset_root'] = args.dataset_root
+
+    if args.batch_size:
+        print(f'INFO: override batch_size to {args.batch_size}')
+        GCFG['batch_size'] = args.batch_size
 
     # load config
     config = ConfigLoader.load(args.config)
