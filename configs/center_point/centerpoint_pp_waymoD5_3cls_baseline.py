@@ -138,7 +138,7 @@ dataloader_train = dict(
         load_opt=dict(load_dim=point_dim, nsweep=1, labels=labels,),
         transforms=[
             dict(type='PcdIntensityNormlizer'),
-            dict(type='PcdObjectSampler', db_sampler=db_sampler),
+            #  dict(type='PcdObjectSampler', db_sampler=db_sampler),
             dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
             dict(type='PcdGlobalTransform',
                  rot_range=[-0.78539816, 0.78539816],
