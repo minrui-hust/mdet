@@ -166,34 +166,24 @@ class CenterPointCodec(BaseCodec):
         pred_list = []
         batch_size = 1 if batch is None else batch['_info_']['size']
         for i in range(batch_size):
+            keep_indices, valid_num = nms_bev(
+                nms_boxes[i],
+                topk_score[i],
+                self.decode_cfg['nms_cfg']['overlap_thresh'],
+                self.decode_cfg['nms_cfg']['post_num'],
+            )
+            keep_indices = keep_indices.long()
             if not infer:
-                mask = topk_score[i] >= self.valid_thresh
-                nms_box = nms_boxes[i][mask]
-                nms_score = topk_score[i][mask]
-                nms_label = topk_label[i][mask]
-                keep_indices, valid_num = nms_bev(
-                    nms_box,
-                    nms_score,
-                    self.decode_cfg['nms_cfg']['overlap_thresh'],
-                    self.decode_cfg['nms_cfg']['post_num'],
-                )
-                keep_indices = keep_indices.long()
                 valid_indices = keep_indices[:valid_num]
-                det_box = topk_boxes[i][mask][valid_indices]
-                det_label = nms_label[valid_indices].cpu().numpy()
-                det_score = nms_score[valid_indices]
+                det_box = topk_boxes[i][valid_indices].cpu().numpy()
+                det_label = topk_label[i][valid_indices].cpu().numpy()
+                det_score = topk_score[i][valid_indices].cpu().numpy()
                 det_type = np.array([self.label_to_type[label]
                                     for label in det_label], dtype=np.int32)
-                pred = Annotation3d(boxes=det_box.cpu().numpy(
-                ), types=det_type, scores=det_score.cpu().numpy())
+                mask = det_score > self.valid_thresh
+                pred = Annotation3d(
+                    boxes=det_box[mask], types=det_type[mask], scores=det_score[mask])
             else:
-                keep_indices, valid_num = nms_bev(
-                    nms_boxes[i],
-                    topk_score[i],
-                    self.decode_cfg['nms_cfg']['overlap_thresh'],
-                    self.decode_cfg['nms_cfg']['post_num'],
-                )
-                keep_indices = keep_indices.long()
                 det_box = topk_boxes[i][keep_indices]
                 det_label = topk_label[i][keep_indices]
                 det_score = topk_score[i][keep_indices]
