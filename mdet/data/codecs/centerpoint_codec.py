@@ -354,7 +354,8 @@ class CenterPointCodec(BaseCodec):
 
         decoded_box_size = torch.exp(boxes[..., 3:6]) / 2
 
-        decoded_box_heading = boxes[..., 6:]
+        decoded_box_heading = boxes[..., 6:] / \
+            torch.norm(boxes[..., 6:], dim=-1, keepdim=True)
 
         decoded_box = torch.cat([
             decoded_box_xy,
