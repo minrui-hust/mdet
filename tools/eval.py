@@ -77,6 +77,7 @@ def main(args):
     config['data'][args.split]['shuffle'] = False
     config['runtime']['eval']['log_loss'] = args.evaluate_loss
     config['runtime']['eval']['evaluate'] = args.evaluate
+    config['runtime']['eval']['evaluate_min_epoch'] = 0
     config['runtime']['eval']['formatted_path'] = args.store_formatted
 
     interest_set = set()

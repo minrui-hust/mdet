@@ -134,6 +134,8 @@ class PlWrapper(pl.LightningModule):
 
         # TODO: collate sample_list from other ddp rank
 
+        print(self.current_epoch)
+
         # epoch callback
         if self.eval_epoch_hook is not None:
             self.eval_epoch_hook(sample_list, self)
