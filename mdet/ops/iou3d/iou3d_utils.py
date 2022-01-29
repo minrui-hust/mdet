@@ -1,10 +1,13 @@
 import torch
 from torch.autograd import Function
+from torch.cuda.amp.autocast_mode import custom_fwd
 
 from .iou3d import OpNMSBEV
 
+
 class _nms_bev(Function):
     @staticmethod
+    @custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, boxes, scores, thresh, max_out):
         """Nms function with gpu implementation.
 
@@ -29,11 +32,12 @@ class _nms_bev(Function):
 
     @staticmethod
     def symbolic(g, boxes, scores, thresh, max_out):
-        return g.op('custom_ops::NMSBEV', 
-                boxes, 
-                scores, 
-                thresh_f=thresh,
-                max_out_i=max_out, 
-                outputs=2)
+        return g.op('custom_ops::NMSBEV',
+                    boxes,
+                    scores,
+                    thresh_f=thresh,
+                    max_out_i=max_out,
+                    outputs=2)
+
 
 nms_bev = _nms_bev.apply

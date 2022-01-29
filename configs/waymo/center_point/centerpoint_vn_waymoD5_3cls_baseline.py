@@ -2,24 +2,26 @@ from copy import deepcopy as _deepcopy
 from mdet.utils.global_config import GCFG
 
 # global config maybe override by command line
-batch_size = GCFG['batch_size'] or 2
-max_epochs = GCFG['max_epochs'] or 32
-lr_scale = GCFG['lr_scale'] or 1.0
+batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
+max_epochs = GCFG['max_epochs'] or 36
+lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
 # global config
-types = [('Vehicle', [1])]
+labels = [('Vehicle', [1]), ('Cyclist', [4]), ('Pedestrian', [2])]
 
-point_range = [-75.52, -75.52, -2, 75.52, 75.52, 4.0]
-voxel_size = [0.32, 0.32, 6.0]
-voxel_reso = [472, 472, 1]
+point_range = [-75.2, -75.2, -2, 75.2, 75.2, 4.0]
+voxel_size = [0.1, 0.1, 0.15]
+voxel_reso = [1504, 1504, 40]
 
-out_grid_size = [0.64, 0.64]
-out_grid_reso = [236, 236]
+# 8x times downsample
+out_grid_size = [0.8, 0.8]
+out_grid_reso = [188, 188]
 
 point_dim = 5
 
 # model config
+# model for training
 model_train = dict(
     type='Det3dOneStage',
     voxelization=dict(
@@ -27,43 +29,35 @@ model_train = dict(
         point_range=point_range,
         voxel_size=voxel_size,
         voxel_reso=voxel_reso,
-        max_points=32,
-        max_voxels=32000,
+        max_points=5,
+        max_voxels=150000,
+        reduce_type='mean',
     ),
     backbone3d=dict(
-        type='PillarFeatureNet',
-        pillar_feat=[
-            ('position', 3),
-            ('attribute', point_dim-3),
-            ('center_offset', 2),
-            ('mean_offset', 3),
-            #  ('distance', 1),
-        ],
-        voxel_reso=voxel_reso,
-        voxel_size=voxel_size,
-        point_range=point_range,
-        pfn_channels=[64, ],
+        type='SparseResNetFHD',
+        in_channels=point_dim,
+        # out_channels=256,
     ),
     backbone2d=dict(
         type='SECOND',
-        layer_nums=[3, 5, 5],
-        layer_strides=[2, 2, 2],
-        out_channels=[64, 128, 256],
-        in_channels=64,
+        in_channels=256,
+        layer_nums=[5, 5],
+        layer_strides=[1, 2],
+        out_channels=[128, 256],
     ),
     neck=dict(
         type='SECONDFPN',
-        in_channels=[64, 128, 256],
-        out_channels=[128, 128, 128],
-        upsample_strides=[1, 2, 4],
+        in_channels=[128, 256],
+        out_channels=[256, 256],
+        upsample_strides=[1, 2],
     ),
     head=dict(
         type='CenterHead',
-        in_channels=3 * 128,
+        in_channels=2 * 256,
         shared_conv_channels=64,
         init_bias=-2.19,
         heads={
-            'heatmap': (len(types), 2),
+            'heatmap': (len(labels), 2),
             'offset': (2, 2),
             'height': (1, 2),
             'size': (3, 2),
@@ -72,9 +66,11 @@ model_train = dict(
     ),
 )
 
+# model for evaluation
 model_eval = _deepcopy(model_train)
 
-model_infer = _deepcopy(model_train)
+# model for inference(export)
+model_infer = _deepcopy(model_eval)
 
 
 # codecs config
@@ -88,34 +84,44 @@ codec_train = dict(
         grid_reso=out_grid_reso,
         min_gaussian_radius=2,
         min_gaussian_overlap=0.1,
+        labels=labels,
     ),
     decode_cfg=dict(
         nms_cfg=dict(
-            pre_num=1024,
-            post_num=256,
-            overlap_thresh=0.1,
+            pre_num=4096,
+            post_num=512,
+            overlap_thresh=0.7,
         ),
+        valid_thresh=0.1,
     ),
     loss_cfg=dict(
         head_weight={
-            'heatmap': 2.0,
-            'offset': 2.0,
-            'height': 1.0,
-            'size': 3.0,
-            'heading': 2.0,
+            'heatmap': 1.0,
+            'offset': 2 * 2.0,
+            'height': 1 * 2.0,
+            'size': 3 * 2.0,
+            'heading': 2 * 2.0,
         },
-        alpha=4.0,
-        beta=2.0,
+        alpha=2.0,
+        beta=4.0,
     ),
 )
 
 codec_eval = _deepcopy(codec_train)
 
 codec_infer = _deepcopy(codec_eval)
-codec_infer['encode_cfg']['encode_anno'] = False
 
 
 # data config
+db_sampler = dict(
+    type='GroundTruthSampler',
+    info_path=f'{dataset_root}/training_info_gt.pkl',
+    sample_groups={'Vehicle': 15, 'Cyclist': 10, 'Pedestrian': 10},
+    labels=labels,
+    pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
+    filter=dict(type='FilterByNumpoints', min_num_points=5),
+)
+
 dataloader_train = dict(
     batch_size=batch_size,
     num_workers=4,
@@ -124,10 +130,15 @@ dataloader_train = dict(
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path=f'{dataset_root}/training_info.pkl',
-        load_opt=dict(load_dim=point_dim, nsweep=1, types=types,),
+        load_opt=dict(load_dim=point_dim, nsweep=1, labels=labels,),
         transforms=[
             dict(type='PcdIntensityNormlizer'),
-            dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[0.95, 1.05]),
+            #  dict(type='PcdObjectSampler', db_sampler=db_sampler),
+            dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
+            dict(type='PcdGlobalTransform',
+                 rot_range=[-0.78539816, 0.78539816],
+                 scale_range=[0.95, 1.05],
+                 translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', point_range=point_range),
             dict(type='PcdShuffler'),
         ],
@@ -156,8 +167,8 @@ model = dict(
 
 codec = dict(
     train=codec_train,
-    eval=codec_eval,
-    infer=codec_infer,
+    eval=codec_train,
+    infer=codec_train,
 )
 
 data = dict(
@@ -175,7 +186,7 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.001 / 16 * batch_size * lr_scale,
+        max_lr=0.003 / 4 * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
@@ -184,7 +195,6 @@ fit = dict(
     grad_clip=dict(type='norm', value=35),
 )
 
-
 runtime = dict(
     train=dict(
         logger=[
@@ -192,6 +202,6 @@ runtime = dict(
             dict(type='CSVLogger',),
         ],
     ),
-    eval=dict(output_folder=None, evaluate=False),
+    eval=dict(evaluate_min_epoch=max_epochs-1),
     test=dict(),
 )

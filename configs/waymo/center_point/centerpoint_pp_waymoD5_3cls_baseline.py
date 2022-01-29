@@ -208,6 +208,6 @@ runtime = dict(
             dict(type='CSVLogger',),
         ],
     ),
-    eval=dict(evaluate_min_epoch=10),
+    eval=dict(evaluate_min_epoch=max_epochs-1),
     test=dict(),
 )
