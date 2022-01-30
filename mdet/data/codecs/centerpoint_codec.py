@@ -177,7 +177,7 @@ class CenterPointCodec(BaseCodec):
             topk_score, rectify_indices = torch.sort(
                 topk_score, dim=-1, descending=True)
 
-            # re-index
+            # re-order
             topk_boxes = topk_boxes.gather(
                 1, rectify_indices.unsqueeze(-1).expand_as(topk_boxes))
             topk_label = topk_label.gather(1, rectify_indices)
