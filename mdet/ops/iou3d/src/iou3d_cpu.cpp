@@ -9,4 +9,10 @@ void nms_bev_cpu(const at::Tensor &boxes, const at::Tensor &scores,
   assert(false);
 }
 
+void iou_bev_cpu(const at::Tensor &pboxes, const at::Tensor &qboxes,
+                 at::Tensor &iou) {
+  // TODO:
+  assert(false);
+}
+
 } // namespace iou3d

@@ -34,6 +34,7 @@ using nms_bev::BITMAP_ITEM_BYTES;
 using nms_bev::THREADS_PER_BLOCK;
 
 using nms_bev::BitmapItem;
+using nms_bev::iouCalcKernel;
 using nms_bev::nmsIouCalcKernel;
 using nms_bev::nmsSelectKernel;
 
@@ -70,6 +71,25 @@ void nms_bev_gpu(const at::Tensor &boxes, const at::Tensor &scores,
       (BitmapItem *)bitmap.data_ptr(), box_num, col_blocks, max_out,
       (BitmapItem *)flag.data_ptr(), selected.data_ptr<int>(),
       valid_num.data_ptr<int>());
+}
+
+void iou_bev_gpu(const at::Tensor &pboxes, const at::Tensor &qboxes,
+                 at::Tensor &iou) {
+  CHECK_INPUT(pboxes, at::ScalarType::Float);
+  CHECK_INPUT(qboxes, at::ScalarType::Float);
+  CHECK_INPUT(iou, at::ScalarType::Float);
+  TORCH_CHECK(pboxes.size(0) == qboxes.size(0));
+  TORCH_CHECK(pboxes.size(1) == qboxes.size(1));
+  TORCH_CHECK(pboxes.size(0) == iou.size(0));
+  at::cuda::CUDAGuard device_guard(pboxes.device());
+
+  const int box_num = pboxes.size(0);
+
+  int block = 512;
+  int grid = CeilDiv(box_num, block);
+  iouCalcKernel<<<grid, block, 0, at::cuda::getCurrentCUDAStream()>>>(
+      pboxes.data_ptr<float>(), qboxes.data_ptr<float>(), box_num,
+      iou.data_ptr<float>());
 }
 
 } // namespace iou3d

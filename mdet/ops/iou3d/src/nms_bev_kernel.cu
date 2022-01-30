@@ -5,7 +5,7 @@
 #include <cuda_runtime_api.h>
 #include <stdio.h>
 
-namespace nms_bev{
+namespace nms_bev {
 using geometry2d::Box;
 using geometry2d::EPS;
 
@@ -104,4 +104,13 @@ __global__ void nmsSelectKernel(const BitmapItem *bitmap, const int box_num,
   }
 }
 
-} // namespace iou3d
+__global__ void iouCalcKernel(const float *pbox_data, const float *qbox_data,
+                              const int box_num, float *iou_data) {
+  CUDA_1D_KERNEL_LOOP(i, box_num) {
+    const Box *pboxes = reinterpret_cast<const Box *>(pbox_data);
+    const Box *qboxes = reinterpret_cast<const Box *>(qbox_data);
+    iou_data[i] = iou_bev(pboxes[i], qboxes[i]);
+  }
+}
+
+} // namespace nms_bev

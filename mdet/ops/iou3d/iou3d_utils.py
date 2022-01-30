@@ -3,6 +3,7 @@ from torch.autograd import Function
 from torch.cuda.amp.autocast_mode import custom_fwd
 
 from .iou3d import OpNMSBEV
+from .iou3d import OpIOUBEV
 
 
 class _nms_bev(Function):
@@ -41,3 +42,9 @@ class _nms_bev(Function):
 
 
 nms_bev = _nms_bev.apply
+
+
+def iou_bev(pboxes, qboxes):
+    iou = pboxes.new_empty(pboxes.size(0))
+    OpIOUBEV(pboxes, qboxes, iou)
+    return iou

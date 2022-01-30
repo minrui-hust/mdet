@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from mdet.core.annotation import Annotation3d
 import mdet.model.loss.loss as loss
-from mdet.ops.iou3d import nms_bev
+from mdet.ops.iou3d import nms_bev, iou_bev
 from mdet.utils.factory import FI
 from mdet.utils.gaussian import draw_gaussian, gaussian_radius
 
@@ -54,6 +54,10 @@ class CenterPointCodec(BaseCodec):
 
         # for decode
         self.valid_thresh = self.decode_cfg.get('valid_thresh', 0.1)
+        self.iou_rectification = self.decode_cfg.get(
+            'iou_rectification', False)
+        self.iou_rectification_gamma = self.decode_cfg.get(
+            'iou_rectification_gamma', 4)
 
         # for loss
         self.criteria_heatmap = partial(
@@ -77,7 +81,7 @@ class CenterPointCodec(BaseCodec):
             (boxes[:, 0] - self.point_range[0]) / self.grid_size[0])
         cords_y = np.floor(
             (boxes[:, 1] - self.point_range[1]) / self.grid_size[1])
-        cords = np.stack((cords_x, cords_y), axis=-1).astype(np.int32)
+        cords = np.stack((cords_x, cords_y), axis=-1).astype(np.float32)
 
         grid_offset = self.point_range[:2] + self.grid_size[:2]/2
         center = cords * self.grid_size[:2] + grid_offset
@@ -150,11 +154,31 @@ class CenterPointCodec(BaseCodec):
 
         # topk_socre: [B, K], topk_indices: [B, K], K = pre_nms_num
         topk_score, topk_indices = score.topk(
-            self.decode_cfg['nms_cfg']['pre_num'])
+            self.decode_cfg['nms_cfg']['pre_num'], sorted=not self.iou_rectification)
 
         topk_boxes = boxes.gather(
-            1, topk_indices.unsqueeze(-1).expand(-1, -1, 8))  # [B, K, 8]
+            1, topk_indices.unsqueeze(-1).expand(-1, -1, boxes.shape[2]))  # [B, K, 8]
         topk_label = label.gather(1, topk_indices)  # [B, K]
+
+        if self.iou_rectification:
+            # get predicted iou
+            iou = output['iou'].permute(0, 2, 3, 1).view(B, H*W, -1)
+            topk_iou = iou.gather(
+                1, topk_indices.unsqueeze(-1).expand(-1, -1, iou.shape[2]))
+            topk_iou = topk_iou.gather(1, topk_label)
+
+            # rectify score
+            topk_score *= torch.pow(topk_iou, self.iou_rectification_gamma)
+
+            # sort by rectified score
+            topk_score, rectify_indices = torch.sort(
+                topk_score, dim=-1, descending=True)
+
+            # re-index
+            topk_boxes = topk_boxes.gather(
+                1, rectify_indices.unsqueeze(-1).expand_as(topk_boxes))
+            topk_label = topk_label.gather(1, rectify_indices)
+            topk_indices = topk_indices.gather(1, rectify_indices)
 
         # decode boxes into standard format
         topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 8]
@@ -197,23 +221,59 @@ class CenterPointCodec(BaseCodec):
         positive_heatmap_index = batch['gt']['positive_heatmap_indices'].long()
 
         loss_dict = {}
-        for head_name, head_prediction in output.items():
+        for head_name in self.loss_cfg['head_weight'].keys():
+            head_prediction = output[head_name]
             if head_name == 'heatmap':
                 heatmap_prediction = self.safe_sigmoid(head_prediction)
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             else:
-                # select the positive predictions
-                positive_prediction = head_prediction[positive_index[:,
-                                                                     0], :, positive_index[:, 1], positive_index[:, 2]]
+                if head_name == 'iou':
+                    # shape Nx8
+                    gt_encoded_boxes = torch.cat([
+                        batch['gt']['offset'],
+                        batch['gt']['height'],
+                        batch['gt']['size'],
+                        batch['gt']['heading'],
+                    ], dim=-1)
+                    positive_gt_boxes = self.decode_box(gt_encoded_boxes.unsqueeze(
+                        0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
+
+                    pred_encoded_boxes = torch.cat([
+                        output['offset'],
+                        output['height'],
+                        output['size'],
+                        output['heading'],
+                    ], dim=1).detach()  # detach here
+                    pred_encoded_boxes = pred_encoded_boxes[positive_index[:, 0],
+                                                            :,
+                                                            positive_index[:, 1],
+                                                            positive_index[:, 2]]
+                    positive_pred_boxes = self.decode_box(
+                        pred_encoded_boxes.unsqueeze(0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
+
+                    positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
+                                              positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
+
+                    positive_pred_iou = head_prediction[positive_heatmap_index[:, 0],
+                                                        positive_heatmap_index[:, 1],
+                                                        positive_heatmap_index[:, 2],
+                                                        positive_heatmap_index[:, 3]]
+                    positive_prediction, positive_gt = positive_pred_iou, positive_gt_iou
+                else:
+                    positive_prediction = head_prediction[positive_index[:, 0],
+                                                          :,
+                                                          positive_index[:, 1],
+                                                          positive_index[:, 2]]
+                    positive_gt = batch['gt'][head_name]
                 loss = self.criteria_regression(
-                    positive_prediction, batch['gt'][head_name])
+                    positive_prediction, positive_gt)
             loss_dict[f'loss_{head_name}'] = loss
 
         # calc the total loss of different heads
         assert(len(self.loss_cfg['head_weight']) == len(loss_dict))
         loss = 0
-        for head_name in self.loss_cfg['head_weight']:
+        for head_name in self.loss_cfg['head_weight'].keys():
             head_loss = loss_dict[f'loss_{head_name}']
             head_wgt = self.loss_cfg['head_weight'][head_name]
             loss += head_wgt*head_loss
