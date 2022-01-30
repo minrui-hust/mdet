@@ -55,9 +55,10 @@ class SepHead(BaseModule):
                     fc.append(nn.BatchNorm2d(head_conv))
                 fc.append(nn.ReLU())
 
+            final_bias = not head_name == 'iou'  # iou no bias
             fc.append(nn.Conv2d(head_conv, channels,
                                 kernel_size=final_kernel, stride=1,
-                                padding=final_kernel // 2, bias=True))
+                                padding=final_kernel // 2, bias=final_bias))
             fc = nn.Sequential(*fc)
 
             # special init for heatmap head

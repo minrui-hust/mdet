@@ -168,6 +168,7 @@ class CenterPointCodec(BaseCodec):
             topk_iou = iou.gather(
                 1, topk_indices.unsqueeze(-1).expand(-1, -1, iou.shape[2]))
             topk_iou = topk_iou.gather(1, topk_label)
+            topk_iou = (topk_iou + 1) * 0.5  # range [-1,1] to [0,1]
 
             # rectify score
             topk_score = topk_score * \
@@ -332,6 +333,8 @@ class CenterPointCodec(BaseCodec):
 
                     positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
                                               positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
+                    # encode iou to range [-1, 1]
+                    positive_gt_iou = 2 * (positive_gt_iou - 0.5)
 
                     positive_pred_iou = head_prediction[positive_heatmap_index[:, 0],
                                                         positive_heatmap_index[:, 1],
