@@ -308,38 +308,42 @@ class CenterPointCodec(BaseCodec):
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             else:
                 if head_name == 'iou':
-                    # shape Nx8
-                    gt_encoded_boxes = torch.cat([
-                        batch['gt']['offset'],
-                        batch['gt']['height'],
-                        batch['gt']['size'],
-                        batch['gt']['heading'],
-                    ], dim=-1)
-                    positive_gt_boxes = self.decode_box(gt_encoded_boxes.unsqueeze(
-                        0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
+                    if len(positive_index) > 0:
+                        # shape Nx8
+                        gt_encoded_boxes = torch.cat([
+                            batch['gt']['offset'],
+                            batch['gt']['height'],
+                            batch['gt']['size'],
+                            batch['gt']['heading'],
+                        ], dim=-1)
+                        positive_gt_boxes = self.decode_box(gt_encoded_boxes.unsqueeze(
+                            0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
 
-                    pred_encoded_boxes = torch.cat([
-                        output['offset'],
-                        output['height'],
-                        output['size'],
-                        output['heading'],
-                    ], dim=1).detach()  # detach here
-                    pred_encoded_boxes = pred_encoded_boxes[positive_index[:, 0],
-                                                            :,
-                                                            positive_index[:, 1],
-                                                            positive_index[:, 2]]
-                    positive_pred_boxes = self.decode_box(
-                        pred_encoded_boxes.unsqueeze(0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
+                        pred_encoded_boxes = torch.cat([
+                            output['offset'],
+                            output['height'],
+                            output['size'],
+                            output['heading'],
+                        ], dim=1).detach()  # detach here
+                        pred_encoded_boxes = pred_encoded_boxes[positive_index[:, 0],
+                                                                :,
+                                                                positive_index[:, 1],
+                                                                positive_index[:, 2]]
+                        positive_pred_boxes = self.decode_box(
+                            pred_encoded_boxes.unsqueeze(0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
 
-                    positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
-                                              positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
-                    # encode iou to range [-1, 1]
-                    positive_gt_iou = 2 * (positive_gt_iou - 0.5)
+                        positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
+                                                  positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
+                        # encode iou to range [-1, 1]
+                        positive_gt_iou = 2 * (positive_gt_iou - 0.5)
 
-                    positive_pred_iou = head_prediction[positive_heatmap_index[:, 0],
-                                                        positive_heatmap_index[:, 1],
-                                                        positive_heatmap_index[:, 2],
-                                                        positive_heatmap_index[:, 3]]
+                        positive_pred_iou = head_prediction[positive_heatmap_index[:, 0],
+                                                            positive_heatmap_index[:, 1],
+                                                            positive_heatmap_index[:, 2],
+                                                            positive_heatmap_index[:, 3]]
+                    else:
+                        positive_pred_iou = output['heatmap'].new_empty((0,))
+                        positive_gt_iou = output['heatmap'].new_empty((0,))
                     positive_prediction, positive_gt = positive_pred_iou, positive_gt_iou
                 else:
                     positive_prediction = head_prediction[positive_index[:, 0],
