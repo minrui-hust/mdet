@@ -70,7 +70,7 @@ class PlWrapper(pl.LightningModule):
     def forward(self, *input):
         # forward is used for export
         output = self.infer_model(*input)
-        pred = self.infer_codec.decode(output, infer=True)
+        pred = self.infer_codec.decode(output)
         return pred
 
     def training_step(self, batch, batch_idx):

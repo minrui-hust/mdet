@@ -111,12 +111,15 @@ codec_train = dict(
         alpha=2.0,
         beta=4.0,
     ),
+    mode='train',
 )
 
 codec_eval = _deepcopy(codec_train)
+codec_eval['mode'] = 'eval'
 
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
+codec_infer['mode'] = 'infer'
 
 
 # data config

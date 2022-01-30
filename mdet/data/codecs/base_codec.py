@@ -16,11 +16,13 @@ class BaseCodec(object):
                  encode_cfg={'encode_data': True, 'encode_anno': True},
                  decode_cfg={},
                  loss_cfg={},
+                 mode='train',  # or 'eval', 'infer'
                  ):
         super().__init__()
         self.encode_cfg = encode_cfg
         self.decode_cfg = decode_cfg
         self.loss_cfg = loss_cfg
+        self.mode = mode
 
     def encode(self, sample, info):
         r'''
@@ -34,10 +36,26 @@ class BaseCodec(object):
         if self.encode_cfg['encode_anno']:
             self.encode_anno(sample, info)
 
-    def decode(self, output, batch):
+    def decode(self, output, batch=None):
         r'''
         output --> pred
         '''
+        if self.mode == 'train':
+            return self.decode_train(output, batch)
+        elif self.mode == 'eval':
+            return self.decode_eval(output, batch)
+        elif self.mode == 'infer':
+            return self.decode_infer(output, batch)
+        else:
+            raise NotImplementedError
+
+    def decode_train(self, output, batch):
+        raise NotImplementedError
+
+    def decode_eval(self, output, batch):
+        raise NotImplementedError
+
+    def decode_infer(self, output, batch):
         raise NotImplementedError
 
     def loss(self, output, batch):
