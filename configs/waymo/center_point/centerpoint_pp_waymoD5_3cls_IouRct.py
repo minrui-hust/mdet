@@ -106,7 +106,7 @@ codec_train = dict(
             'height': 1 * 2.0,
             'size': 3 * 2.0,
             'heading': 2 * 2.0,
-            'iou': len(labels) * 2.0,
+            'iou': 1.0,
         },
         alpha=2.0,
         beta=4.0,
