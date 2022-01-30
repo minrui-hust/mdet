@@ -24,8 +24,8 @@ class CenterPointCodec(BaseCodec):
     '''
 
     #  def __init__(self, point_range, grid_size, grid_reso, min_gaussian_radius=1, min_gaussian_overlap=0.5, data_enable=True, anno_enable=True):
-    def __init__(self, encode_cfg, decode_cfg, loss_cfg):
-        super().__init__(encode_cfg, decode_cfg, loss_cfg)
+    def __init__(self, encode_cfg, decode_cfg, loss_cfg, mode='train'):
+        super().__init__(encode_cfg, decode_cfg, loss_cfg, mode)
 
         # for encode
         # float [x_min, y_min, z_min, x_max, y_max, z_max]
