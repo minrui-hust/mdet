@@ -58,13 +58,13 @@ class GroundTruthSampler(object):
                  sample_groups,
                  labels,
                  pcd_loader,
-                 filter=None):
+                 filters=[]):
         super().__init__()
         self.info_path = info_path
         self.sample_groups = sample_groups
         self.labels = labels
         self.pcd_loader = FI.create(pcd_loader)
-        self.filter = FI.create(filter)
+        self.filters = [FI.create(cfg) for cfg in filters]
 
         self.type2label = {}  # map type id to lable name
         self.labelname2id = {}
@@ -76,21 +76,20 @@ class GroundTruthSampler(object):
         # load infos
         db_infos = io.load(info_path)
 
-        # filter info and orgnize by label but raw type
+        # filter info and orgnize by label
         self.label_info_list = {label: [] for label, _ in self.labels}
-        for cat, info_list in db_infos.items():
-            if cat not in self.type2label:  # this cat is not interested
+        for type, info_list in db_infos.items():
+            if type not in self.type2label:  # this type is not interested
                 continue
+            label = self.type2label[type]
+            for filter in self.filters:
+                info_list = filter(info_list)
+            self.label_info_list[label].extend(info_list)
 
-            cat_info = [
-                info for info in info_list
-                if not self.filter or self.filter(info)
-            ]
-            self.label_info_list[self.type2label[cat]].extend(cat_info)
-
-        self.sampler_dict = {}
-        for label, infos in self.label_info_list.items():
-            self.sampler_dict[label] = BatchSampler(label, infos, shuffle=True)
+        # sampler of different label
+        self.sampler_dict = {label: BatchSampler(label, info_list, shuffle=True)
+                             for
+                             label, info_list in self.label_info_list.items()}
 
     def sample_all(self, gt_anno):
         """Sampling all categories of bboxes.
@@ -104,12 +103,10 @@ class GroundTruthSampler(object):
                 - sample_pcd(PointCloud): sampled gt pointcloud
         """
         sampled_num_dict = {}
-        for label_name, max_sample_num in self.sample_groups.items():
-            label_id = self.labelname2id[label_name]
-            sampled_num = int(max_sample_num -
-                              np.sum([n == label_id
-                                      for n in gt_anno.types]))
-            sampled_num_dict[label_name] = sampled_num
+        for label, max_sample_num in self.sample_groups:
+            sampled_num = int(
+                max_sample_num - np.sum([self.type2label[type] == label for type in gt_anno.types]))
+            sampled_num_dict[label] = sampled_num
 
         samples = []
         sampled_box_list = []
@@ -202,8 +199,8 @@ class FilterByDifficulty(object):
         super().__init__()
         self.difficulties_to_remove = difficulties_to_remove
 
-    def __call__(self, info):
-        return info['difficulty'] not in self.difficulties_to_remove
+    def __call__(self, info_list):
+        return [info for info in info_list if info['difficulty'] not in self.difficulties_to_remove]
 
 
 @FI.register
@@ -216,5 +213,5 @@ class FilterByNumpoints(object):
         super().__init__()
         self.min_num_points = min_num_points
 
-    def __call__(self, info):
-        return info['num_points'] >= self.min_num_points
+    def __call__(self, info_list):
+        return [info for info in info_list if info['num_points'] > self.min_num_points]
