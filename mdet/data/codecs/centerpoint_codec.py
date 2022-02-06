@@ -110,7 +110,7 @@ class CenterPointCodec(BaseCodec):
             # skip object out of bound
             if not(center[0] >= 0 and center[0] < self.grid_reso[0] and
                     center[1] >= 0 and center[1] < self.grid_reso[1]):
-                continue
+                raise AssertionError(f'center: {center}, box: {boxes[i]}')
 
             l, w = box[3] / self.grid_size[0], box[4] / self.grid_size[1]
             radius = gaussian_radius((l, w), self.min_gaussian_overlap)

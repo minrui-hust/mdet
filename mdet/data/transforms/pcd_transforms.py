@@ -9,15 +9,15 @@ class PcdRangeFilter(object):
     Filter out the out of range object
     '''
 
-    def __init__(self, point_range):
+    def __init__(self, box_range):
         super().__init__()
-        self.point_range = np.array(point_range, dtype=np.float32)
+        self.box_range = np.array(box_range, dtype=np.float32)
 
     def __call__(self, sample, info):
-        x_min = self.point_range[0]
-        y_min = self.point_range[1]
-        x_max = self.point_range[3]
-        y_max = self.point_range[4]
+        x_min = self.box_range[0]
+        y_min = self.box_range[1]
+        x_max = self.box_range[3]
+        y_max = self.box_range[4]
 
         boxes = sample['anno'].boxes
 
