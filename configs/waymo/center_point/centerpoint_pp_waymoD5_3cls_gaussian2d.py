@@ -3,6 +3,7 @@ from mdet.utils.global_config import GCFG
 
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
+num_workers = GCFG['num_workers'] or 4
 max_epochs = GCFG['max_epochs'] or 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
@@ -91,20 +92,12 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
-        min_gaussian_radius=2,
-        min_gaussian_overlap=0.1,
         labels=labels,
         heatmap_encoder=dict(
-            type='NaiveGaussianBoxHeatmapEncoder',
+            type='GaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
             min_radius=2,
-            min_overlap=0.1,
         ),
-        #  heatmap_encoder=dict(
-        #      type='GaussianBoxHeatmapEncoder',
-        #      grid=out_grid_size[0],
-        #      min_radius=2,
-        #  ),
     ),
     decode_cfg=dict(
         nms_cfg=dict(
@@ -144,7 +137,7 @@ db_sampler = dict(
 
 dataloader_train = dict(
     batch_size=batch_size,
-    num_workers=4,
+    num_workers=num_workers,
     shuffle=True,
     pin_memory=True,
     dataset=dict(
@@ -162,7 +155,7 @@ dataloader_train = dict(
             dict(type='PcdRangeFilter', box_range=box_range),
             dict(type='PcdShuffler'),
         ],
-        #  filter=dict(type='IntervalDownsampler', interval=5),
+        filter=dict(type='IntervalDownsampler', interval=5),
     ),
 )
 

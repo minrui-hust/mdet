@@ -46,6 +46,8 @@ def parse_args():
                         help='the dataset root folder, this will override config')
     parser.add_argument('--batch_size', type=int,
                         help='override batch in config')
+    parser.add_argument('--num_workers', type=int,
+                        help='override num_workers in config')
     return parser.parse_args()
 
 
@@ -66,6 +68,10 @@ def main(args):
     if args.batch_size:
         print(f'INFO: override batch_size to {args.batch_size}')
         GCFG['batch_size'] = args.batch_size
+
+    if args.num_workers:
+        print(f'INFO: override num_workers to {args.num_workers}')
+        GCFG['num_workers'] = args.num_workers
 
     # load config
     config = ConfigLoader.load(args.config)
