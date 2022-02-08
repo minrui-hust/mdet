@@ -199,7 +199,7 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.003 / 4 * batch_size * lr_scale,
+        max_lr=(0.003 / 16) * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
