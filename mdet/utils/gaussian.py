@@ -50,3 +50,61 @@ def draw_gaussian(heatmap, center, radius, k=1):
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:  # TODO debug
         np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
     return heatmap
+
+
+def gaussian_kernel_2D(shape, sigma, rot, eps=1e-6):
+    r'''
+    Args:
+        shape: int array like with length 2, [x_radius, y_radius]
+        sigma: std variance, array like with length 2
+        rotation: rotation matrix of 2x2
+    '''
+    # cordinates
+    rx, ry = shape[0], shape[1]
+    y, x = np.broadcast_arrays(*np.ogrid[-ry:ry+1, -rx:rx+1])
+    cord = np.stack([x, y], axis=-1)  # (2*ry+1)x(2*rx+1)x2
+
+    # the rotation matrix
+    rotm = np.array([[rot[0], rot[1]], [-rot[1], rot[0]]], dtype=np.float32)
+
+    # information matrix
+    H = rotm.T @ np.diag([1/(s*s) for s in sigma]) @ rotm
+
+    # mahalanobis distance
+    D = (cord[:, :, np.newaxis, :] @ H @
+         cord[:, :, :, np.newaxis]).squeeze(-1).squeeze(-1)
+
+    # kernel value
+    kernel = np.exp(-0.5*D)
+
+    # filter value too small
+    kernel[kernel < eps] = 0
+
+    return kernel
+
+
+def draw_gaussian_kernel_2D(heatmap, center, kernel):
+    r'''
+    Args:
+        heatmap: heatmap to draw on, shape NxN
+        center: center of kernel on heatmap
+        kernel: the kernel to draw
+    '''
+    x, y = int(center[0]), int(center[1])
+
+    h_heatmap, w_heatmap = heatmap.shape[0:2]
+    h_kernel, w_kernel = kernel.shape[0:2]
+    ry_kernel, rx_kernel = int((h_kernel-1)/2), int((w_kernel-1)/2)
+
+    left, right = min(x, rx_kernel), min(w_heatmap - x, rx_kernel + 1)
+    top, bottom = min(y, ry_kernel), min(h_heatmap - y, ry_kernel + 1)
+
+    masked_heatmap = heatmap[y - top:y + bottom,
+                             x - left:x + right]
+    masked_gaussian = kernel[ry_kernel - top: ry_kernel + bottom,
+                             rx_kernel - left: rx_kernel + right]
+
+    if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:  # TODO debug
+        np.maximum(masked_heatmap, masked_gaussian, out=masked_heatmap)
+
+    return heatmap

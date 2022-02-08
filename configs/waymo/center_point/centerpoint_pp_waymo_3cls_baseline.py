@@ -20,7 +20,7 @@ out_grid_reso = [468, 468]
 point_dim = 5
 
 margin = 1.0
-box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin, 
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin,
              point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
 
 # model config
@@ -94,6 +94,17 @@ codec_train = dict(
         min_gaussian_radius=2,
         min_gaussian_overlap=0.1,
         labels=labels,
+        #  heatmap_encoder=dict(
+        #      type='NaiveGaussianBoxHeatmapEncoder',
+        #      grid=out_grid_size[0],
+        #      min_radius=2,
+        #      min_overlap=0.1,
+        #  ),
+        heatmap_encoder=dict(
+            type='GaussianBoxHeatmapEncoder',
+            grid=out_grid_size[0],
+            min_radius=2,
+        ),
     ),
     decode_cfg=dict(
         nms_cfg=dict(
