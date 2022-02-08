@@ -19,6 +19,10 @@ out_grid_reso = [468, 468]
 
 point_dim = 5
 
+margin = 1.0
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin, 
+             point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
+
 # model config
 model_train = dict(
     type='Det3dOneStage',
@@ -144,7 +148,7 @@ dataloader_train = dict(
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
-            dict(type='PcdRangeFilter', point_range=point_range),
+            dict(type='PcdRangeFilter', box_range=box_range),
             dict(type='PcdIntensityNormlizer'),
             dict(type='PcdShuffler'),
         ],
@@ -157,7 +161,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdIntensityNormlizer'),
-    dict(type='PcdRangeFilter', point_range=point_range),
+    dict(type='PcdRangeFilter', box_range=box_range),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None
