@@ -73,6 +73,8 @@ class GroundTruthSampler(object):
                 self.type2label[type] = label_name
             self.labelname2id[label_name] = label_id
 
+        print('Initializing GroundTruthSampler...')
+
         # load infos
         db_infos = io.load(info_path)
 

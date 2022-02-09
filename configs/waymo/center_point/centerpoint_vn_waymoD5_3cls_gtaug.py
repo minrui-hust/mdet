@@ -133,7 +133,7 @@ db_sampler = dict(
 
 dataloader_train = dict(
     batch_size=batch_size,
-    num_workers=4,
+    num_workers=num_workers,
     shuffle=True,
     pin_memory=True,
     dataset=dict(
