@@ -37,6 +37,7 @@ class MDetDataset(TorchDataset):
             for i in info:
                 sample = Sample()
                 self.process(sample, i)
+                sample_list.append(sample)
             return sample_list
         else:
             sample = Sample()
