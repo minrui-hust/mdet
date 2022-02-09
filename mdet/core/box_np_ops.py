@@ -2,6 +2,22 @@ import numba
 import numpy as np
 
 
+@numba.njit
+def _rotation_box2d_jit(corners, rot, rot_mat_T):
+    """Rotate 2D boxes.
+
+    Args:
+        corners (np.ndarray): Corners of boxes.
+        rot (cos,sin): Rotation.
+        rot_mat_T (np.ndarray): Transposed rotation matrix.
+    """
+    rot_mat_T[0, 0] = rot[0]
+    rot_mat_T[0, 1] = rot[1]
+    rot_mat_T[1, 0] = -rot[1]
+    rot_mat_T[1, 1] = rot[0]
+    corners[:] = corners @ rot_mat_T
+
+
 def rotate2d(points, rotation):
     """Rotation 2d, local point to global point
 

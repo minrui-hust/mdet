@@ -1,6 +1,12 @@
-from mdet.utils.factory import FI
 import numpy as np
-from mdet.core.box_np_ops import rotate2d
+
+from mdet.core.box_np_ops import points_in_box
+from mdet.data.transforms.transform_utils import (
+    noise_per_box,
+    transform_boxes,
+    transform_points,
+)
+from mdet.utils.factory import FI
 
 
 @FI.register
@@ -56,7 +62,8 @@ class PcdShuffler(object):
         super().__init__()
 
     def __call__(self, sample, info):
-        sample['data']['pcd'].points = np.random.permutation(sample['data']['pcd'].points)
+        sample['data']['pcd'].points = np.random.permutation(
+            sample['data']['pcd'].points)
 
 
 @FI.register
@@ -105,7 +112,8 @@ class PcdGlobalTransform(object):
             [[cos_alpha, -sin_alpha], [sin_alpha, cos_alpha]], dtype=np.float32)
 
         # rotate points
-        sample['data']['pcd'].points[:, :2] = sample['data']['pcd'].points[:, :2] @ rotm
+        sample['data']['pcd'].points[:,
+                                     :2] = sample['data']['pcd'].points[:, :2] @ rotm
 
         #  rotate boxes center
         sample['anno'].boxes[:, :2] = sample['anno'].boxes[:, :2] @ rotm
@@ -186,3 +194,50 @@ class PcdObjectSampler(object):
 
         # add points in sampled boxes
         sample['data']['pcd'] += sampled['sample_pcd']
+
+
+@FI.register
+class PcdLocalTransform(object):
+    r'''
+    Apply local transform to each ground truth object
+    '''
+
+    def __init__(self, translation_std=[0, 0, 0], rot_range=[-0.78539816, 0.78539816], num_try=50):
+        super().__init__()
+
+        self.translation_std = np.array(translation_std, dtype=np.float32)
+        self.rot_range = rot_range
+        self.num_try = num_try
+
+    def __call__(self, sample, info):
+        boxes = sample['anno'].boxes
+        points = sample['data']['pcd'].points
+
+        num_boxes = boxes.shape[0]
+
+        loc_noises = np.random.normal(
+            scale=self.translation_std, size=[num_boxes, self.num_try, 3])
+        angle_noises = np.random.uniform(
+            self.rot_range[0], self.rot_range[1], size=[num_boxes, self.num_try])
+        rot_noises = np.stack(
+            [np.cos(angle_noises), np.sin(angle_noises)], axis=-1)
+
+        noise_indices = noise_per_box(boxes, loc_noises, rot_noises)[
+            :, np.newaxis, np.newaxis]
+
+        loc_noises = np.take_along_axis(loc_noises, np.broadcast_to(
+            noise_indices, (num_boxes, 1, 3)), axis=1).squeeze(1)
+        rot_noises = np.take_along_axis(rot_noises, np.broadcast_to(
+            noise_indices, (num_boxes, 1, 2)), axis=1).squeeze(1)
+
+        print(loc_noises)
+        print(rot_noises)
+
+        point_mask = points_in_box(points, boxes)  # [num_boxes, num_points]
+
+        # transform points
+        transform_points(
+            points, boxes[:, :3], point_mask, loc_noises, rot_noises)
+
+        # transform box
+        transform_boxes(boxes, loc_noises, rot_noises)
