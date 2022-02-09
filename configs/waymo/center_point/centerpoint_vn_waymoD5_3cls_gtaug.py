@@ -20,6 +20,10 @@ out_grid_reso = [188, 188]
 
 point_dim = 5
 
+margin = 1.0
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin,
+             point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
+
 # model config
 # model for training
 model_train = dict(
@@ -82,14 +86,18 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
-        min_gaussian_radius=2,
-        min_gaussian_overlap=0.1,
         labels=labels,
+        heatmap_encoder=dict(
+            type='NaiveGaussianBoxHeatmapEncoder',
+            grid=out_grid_size[0],
+            min_radius=2,
+            min_overlap=0.1,
+        ),
     ),
     decode_cfg=dict(
         nms_cfg=dict(
             pre_num=4096,
-            post_num=512,
+            post_num=500,
             overlap_thresh=0.7,
         ),
         valid_thresh=0.1,
@@ -138,7 +146,7 @@ dataloader_train = dict(
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
-            dict(type='PcdRangeFilter', point_range=point_range),
+            dict(type='PcdRangeFilter', box_range=box_range),
             dict(type='PcdIntensityNormlizer'),
             dict(type='PcdShuffler'),
         ],
@@ -151,7 +159,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdIntensityNormlizer'),
-    dict(type='PcdRangeFilter', point_range=point_range),
+    dict(type='PcdRangeFilter', box_range=box_range),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None

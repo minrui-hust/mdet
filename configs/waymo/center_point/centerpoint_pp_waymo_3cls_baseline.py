@@ -105,6 +105,7 @@ codec_train = dict(
             post_num=500,
             overlap_thresh=0.7,
         ),
+        valid_thresh=0.1,
     ),
     loss_cfg=dict(
         head_weight={
