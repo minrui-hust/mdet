@@ -230,9 +230,6 @@ class PcdLocalTransform(object):
         rot_noises = np.take_along_axis(rot_noises, np.broadcast_to(
             noise_indices, (num_boxes, 1, 2)), axis=1).squeeze(1)
 
-        print(loc_noises)
-        print(rot_noises)
-
         point_mask = points_in_box(points, boxes)  # [num_boxes, num_points]
 
         # transform points
