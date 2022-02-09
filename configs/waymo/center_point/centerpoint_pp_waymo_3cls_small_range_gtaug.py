@@ -91,9 +91,13 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
-        min_gaussian_radius=2,
-        min_gaussian_overlap=0.1,
-        labels=labels,
+        labels =labels,
+        heatmap_encoder=dict(
+            type='NaiveGaussianBoxHeatmapEncoder',
+            grid=out_grid_size[0],
+            min_radius=2,
+            min_overlap=0.1,
+        ),
     ),
     decode_cfg=dict(
         nms_cfg=dict(
