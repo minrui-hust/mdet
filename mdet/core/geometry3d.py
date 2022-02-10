@@ -12,12 +12,10 @@ def points_in_boxes(points, boxes):
         points: [N,3]
         boxes: [M, 8]
     '''
-    num_points = points.shape[0]
     num_boxes = boxes.shape[0]
-    ret = np.zeros((num_points, num_boxes), dtype=np.bool_)
 
-    kdt = KDTree(np.ascontiguousarray(
-        points[:, :2]), leafsize=100, balanced_tree=False, compact_nodes=False)
+    kdt = KDTree(points[:, :2], leafsize=100,
+                 balanced_tree=False, compact_nodes=False)
 
     center = boxes[:, :2]
     radius = np.linalg.norm(boxes[:, 3:5], axis=-1)
@@ -47,3 +45,9 @@ def points_in_boxes(points, boxes):
         indice_list.append(in_indice)
 
     return indice_list
+
+
+def remove_points_in_boxes(points, boxes):
+    indice_list = points_in_boxes(points, boxes)
+    del_indice = np.concatenate(indice_list)
+    return np.delete(points, del_indice, axis=0)

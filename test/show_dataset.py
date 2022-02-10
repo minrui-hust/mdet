@@ -33,17 +33,17 @@ dataset = dict(
     info_path='/data/tmp/waymo/training_info.pkl',
     load_opt=dict(load_dim=5, nsweep=1, labels=labels,),
     transforms=[
-        #  dict(type='PcdIntensityNormlizer'),
-        #  dict(type='PcdObjectSampler', db_sampler=db_sampler),
+        dict(type='PcdIntensityNormlizer'),
+        dict(type='PcdObjectSampler', db_sampler=db_sampler),
         dict(type='PcdLocalTransform',
              rot_range=[-0.17, 0.17], translation_std=[0.5, 0.5, 0], num_try=50),
-        #  dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
-        #  dict(type='PcdGlobalTransform',
-        #       rot_range=[-0.78539816, 0.78539816],
-        #       scale_range=[0.95, 1.05],
-        #       translation_std=[0.5, 0.5, 0]),
-        #  dict(type='PcdRangeFilter', box_range=box_range),
-        #  dict(type='PcdShuffler'),
+        dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
+        dict(type='PcdGlobalTransform',
+             rot_range=[-0.78539816, 0.78539816],
+             scale_range=[0.95, 1.05],
+             translation_std=[0.5, 0.5, 0]),
+        dict(type='PcdRangeFilter', box_range=box_range),
+        dict(type='PcdShuffler'),
     ],
     #  filter=dict(type='IntervalDownsampler', interval=5),
 )
@@ -53,7 +53,7 @@ dataset = FI.create(dataset)
 #      dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2,
-                        num_workers=0, collate_fn=lambda x: x)
+                        num_workers=2, collate_fn=lambda x: x)
 
 #  dataset.plot(dataset[0])
 for batch in tqdm(dataloader):

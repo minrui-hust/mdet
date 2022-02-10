@@ -1,8 +1,7 @@
 import numpy as np
 
-from mdet.core.geometry3d import points_in_boxes
+from mdet.core.geometry3d import remove_points_in_boxes, points_in_boxes
 
-#  from mdet.core.box_np_ops import points_in_boxes
 
 from mdet.data.transforms.transform_utils import (
     noise_per_box,
@@ -194,8 +193,8 @@ class PcdObjectSampler(object):
         sample['anno'] += sampled['sample_anno']
 
         # remove points in sampled boxes
-        sample['data']['pcd'].remove_points_in_boxes(
-            sampled['sample_anno'].boxes)
+        sample['data']['pcd'].points = remove_points_in_boxes(
+            sample['data']['pcd'].points, sampled['sample_anno'].boxes)
 
         # add points in sampled boxes
         sample['data']['pcd'] += sampled['sample_pcd']

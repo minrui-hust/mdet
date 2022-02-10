@@ -1,6 +1,7 @@
 import numpy as np
 from mdet.core.box_np_ops import points_in_boxes
 
+
 class Pointcloud(object):
     def __init__(self, points):
         super().__init__()
@@ -17,7 +18,3 @@ class Pointcloud(object):
 
     def __iadd__(self, other):
         return self.__add__(other)
-
-    def remove_points_in_boxes(self, boxes):
-        mask = points_in_boxes(self.points, boxes)
-        self.points = self.points[np.logical_not(mask.any(-1))]
