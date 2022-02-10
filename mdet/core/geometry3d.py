@@ -5,24 +5,23 @@ from mdet.core.geometry2d import rotate_points
 from scipy.spatial import KDTree
 
 
-def points_in_boxes(points, boxes):
+def points_in_boxes(points, boxes, kdt=None, return_kdt=False):
     r'''
     check if point in bev box(3d box with only yaw)
     Args:
         points: [N,3]
         boxes: [M, 8]
     '''
-    num_boxes = boxes.shape[0]
-
-    kdt = KDTree(points[:, :2], leafsize=100,
-                 balanced_tree=False, compact_nodes=False)
+    if not kdt:
+        kdt = KDTree(points[:, :2], leafsize=100,
+                     balanced_tree=False, compact_nodes=False)
 
     center = boxes[:, :2]
     radius = np.linalg.norm(boxes[:, 3:5], axis=-1)
     nbs_list = kdt.query_ball_point(center, radius, return_sorted=False)
 
     indice_list = []
-    for i in range(num_boxes):
+    for i in range(boxes.shape[0]):
         nbs = np.array(nbs_list[i], dtype=np.int32)
         nb_points = points[nbs, :3]
 
@@ -44,10 +43,13 @@ def points_in_boxes(points, boxes):
 
         indice_list.append(in_indice)
 
-    return indice_list
+    if return_kdt:
+        return indice_list, kdt
+    else:
+        return indice_list
 
 
-def remove_points_in_boxes(points, boxes):
-    indice_list = points_in_boxes(points, boxes)
+def remove_points_in_boxes(points, boxes, kdt=None):
+    indice_list = points_in_boxes(points, boxes, kdt=kdt)
     del_indice = np.concatenate(indice_list)
     return np.delete(points, del_indice, axis=0)

@@ -53,11 +53,8 @@ dataset = FI.create(dataset)
 #      dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2,
-                        num_workers=2, collate_fn=lambda x: x)
+                        num_workers=0, collate_fn=lambda x: x)
 
 #  dataset.plot(dataset[0])
 for batch in tqdm(dataloader):
     pass
-
-#  for data in dataset[250:300]:
-#      dataset.plot(data)

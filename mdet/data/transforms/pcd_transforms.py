@@ -1,6 +1,6 @@
 import numpy as np
 
-from mdet.core.geometry3d import remove_points_in_boxes, points_in_boxes
+from mdet.core.geometry3d import remove_points_in_boxes, points_in_boxes, remove_points_in_boxes
 
 
 from mdet.data.transforms.transform_utils import (
@@ -234,11 +234,21 @@ class PcdLocalTransform(object):
         rot_noises = np.take_along_axis(rot_noises, np.broadcast_to(
             noise_indices, (num_boxes, 1, 2)), axis=1).squeeze(1)
 
-        indice_list = points_in_boxes(points, boxes)  # [num_boxes, num_points]
+        indice_list_raw, kdt = points_in_boxes(points, boxes, return_kdt=True)
 
-        # transform points
-        transform_points(points, boxes[:, :3],
-                         indice_list, loc_noises, rot_noises)
-
-        # transform box
+        # transform boxes
         transform_boxes(boxes, loc_noises, rot_noises)
+        indice_list_new = points_in_boxes(points, boxes, kdt=kdt)
+
+        # get trasformed boxes' points
+        box_points_list = [points[idx] for idx in indice_list_raw]
+        transform_points(box_points_list, boxes[:, :3], loc_noises, rot_noises)
+        boxes_points = np.concatenate(box_points_list, axis=0)
+
+        # remove points in boxes(extract back ground points)
+        del_indice = np.concatenate(indice_list_raw + indice_list_new)
+        bg_points = np.delete(points, del_indice, axis=0)
+
+        # concatenate back ground points and boxes' points
+        sample['data']['pcd'].points = np.concatenate(
+            [bg_points, boxes_points], axis=0)

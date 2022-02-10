@@ -34,34 +34,19 @@ def noise_per_box_jit(box_centers, box_corners, loc_noises, rot_noises):
     return noise_index
 
 
-def transform_points(points, centers, point_indice_list, translation, rotation):
-    """Apply transforms to points and box centers.
-
-    Args:
-        points (np.ndarray): Input points.
-        centers (np.ndarray): Input box centers.
-        point_masks (np.ndarray): Mask to indicate which points need
-            to be transformed.
-        translation(np.ndarray): Location transform to be applied.
-        rotation(np.ndarray): Rotation transform to be applied.
-    """
-    num_box = centers.shape[0]
-
-    for i in range(num_box):
-        box_points = points[point_indice_list[i], :3]
+def transform_points(points_list, centers, translation, rotation):
+    r'''Apply transforms to points
+    '''
+    for i in range(centers.shape[0]):
+        box_points = points_list[i][:, :3]
         box_points = box_points - centers[i]
         box_points[:, :2] = rotate_points(box_points[:, :2], rotation[i])
         box_points = box_points + centers[i] + translation[i]
-        points[point_indice_list[i], :3] = box_points
+        points_list[i][:, :3] = box_points
 
 
 def transform_boxes(boxes, translation, rotation):
-    """Transform 3D boxes.
-
-    Args:
-        boxes (np.ndarray): 3D boxes to be transformed.
-        translation(np.ndarray): Location transform to be applied.
-        rotation(np.ndarray): Rotation transform to be applied.
-    """
+    r'''Transform 3D boxes.
+    '''
     boxes[:, :3] = boxes[:, :3] + translation
     boxes[:, 6:] = rotate_points(boxes[:, 6:], rotation)
