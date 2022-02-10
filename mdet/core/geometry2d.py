@@ -25,12 +25,12 @@ def rotate_points(points, rotation):
     rotation_ndim = len(rotation.shape)
 
     if rotation_ndim == 1 and (points_ndim == 1 or points_ndim == 2 or points_ndim == 3):
-        t = np.concatenate([-rotation[1], rotation[0]])
-        rotm = np.stack([rotation, t], axis=0)
+        t = np.array([-rotation[1], rotation[0]], dtype=rotation.dtype)
+        rotm = np.stack((rotation, t), axis=0)
         return points @ rotm
     elif rotation_ndim == 2 and (points_ndim == 2 or points_ndim == 3):
-        t = np.stack([-rotation[:, 1], rotation[:, 0]], axis=-1)
-        rotm = np.stack([rotation, t], axis=1)
+        t = np.stack((-rotation[:, 1], rotation[:, 0]), axis=-1)
+        rotm = np.stack((rotation, t), axis=1)
         if points_ndim == 2:
             return (points[:, np.newaxis, :] @ rotm).squeeze(1)
         else:  # points_ndim==3
@@ -42,14 +42,15 @@ def rotate_points(points, rotation):
 @nb.njit(fastmath=True)
 def rotate_points_jit(points, rotation):
     r'''
+    only handle points [N, 2], rotation [2]
     '''
     points_ndim = len(points.shape)
     rotation_ndim = len(rotation.shape)
     assert(points_ndim == 2 and rotation_ndim == 1)
 
-    t = np.concatenate([-rotation[1], rotation[0]])
-    rotm = np.stack([rotation, t], axis=0)
-    return points @ rotm
+    t = np.array([-rotation[1], rotation[0]], dtype=rotation.dtype)
+    rotm = np.stack((rotation, t), axis=0)
+    return np.ascontiguousarray(points) @ rotm
 
 
 def boxes_corners(boxes):

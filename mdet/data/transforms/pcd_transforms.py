@@ -1,12 +1,17 @@
 import numpy as np
 
-from mdet.core.box_np_ops import points_in_box
+from mdet.core.geometry3d import points_in_boxes
+
+#  from mdet.core.box_np_ops import points_in_boxes
+
 from mdet.data.transforms.transform_utils import (
     noise_per_box,
     transform_boxes,
     transform_points,
 )
 from mdet.utils.factory import FI
+
+import time
 
 
 @FI.register
@@ -216,9 +221,9 @@ class PcdLocalTransform(object):
         num_boxes = boxes.shape[0]
 
         loc_noises = np.random.normal(
-            scale=self.translation_std, size=[num_boxes, self.num_try, 3])
+            scale=self.translation_std, size=[num_boxes, self.num_try, 3]).astype(np.float32)
         angle_noises = np.random.uniform(
-            self.rot_range[0], self.rot_range[1], size=[num_boxes, self.num_try])
+            self.rot_range[0], self.rot_range[1], size=[num_boxes, self.num_try]).astype(np.float32)
         rot_noises = np.stack(
             [np.cos(angle_noises), np.sin(angle_noises)], axis=-1)
 
@@ -230,11 +235,11 @@ class PcdLocalTransform(object):
         rot_noises = np.take_along_axis(rot_noises, np.broadcast_to(
             noise_indices, (num_boxes, 1, 2)), axis=1).squeeze(1)
 
-        point_mask = points_in_box(points, boxes)  # [num_boxes, num_points]
+        indice_list = points_in_boxes(points, boxes)  # [num_boxes, num_points]
 
         # transform points
-        transform_points(
-            points, boxes[:, :3], point_mask, loc_noises, rot_noises)
+        transform_points(points, boxes[:, :3],
+                         indice_list, loc_noises, rot_noises)
 
         # transform box
         transform_boxes(boxes, loc_noises, rot_noises)
