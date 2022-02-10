@@ -54,7 +54,7 @@ def rotate3d_z(points, rotation):
     return np.einsum('aij,jka->aik', points, rot_mat_T)
 
 
-def points_in_box(points, boxes):
+def points_in_boxes(points, boxes):
     box_corners = box_corner(boxes)
     surfaces = corner_to_surfaces_3d(box_corners)
     indices = points_in_convex_polygon_3d_jit(points[:, :3], surfaces)
