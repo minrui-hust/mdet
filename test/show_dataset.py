@@ -48,13 +48,57 @@ dataset = dict(
     #  filter=dict(type='IntervalDownsampler', interval=5),
 )
 
+
+# codecs config
+codec = dict(
+    type='CenterPointCodec',
+    encode_cfg=dict(
+        encode_data=True,
+        encode_anno=True,
+        point_range=point_range,
+        grid_size=out_grid_size,
+        grid_reso=out_grid_reso,
+        labels=labels,
+        heatmap_encoder=dict(
+            type='NaiveGaussianBoxHeatmapEncoder',
+            grid=out_grid_size[0],
+            min_radius=2,
+            min_overlap=0.1,
+        ),
+    ),
+    decode_cfg=dict(
+        nms_cfg=dict(
+            pre_num=4096,
+            post_num=500,
+            overlap_thresh=0.7,
+        ),
+        valid_thresh=0.1,
+    ),
+    loss_cfg=dict(
+        head_weight={
+            'heatmap': 1.0,
+            'offset': 2 * 2.0,
+            'height': 1 * 2.0,
+            'size': 3 * 2.0,
+            'heading': 2 * 2.0,
+        },
+        alpha=2.0,
+        beta=4.0,
+    ),
+)
+
+
 dataset = FI.create(dataset)
+codec = FI.create(codec)
+dataset.codec = codec
+
 #  for i in range(len(dataset)):
 #      dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2,
-                        num_workers=0, collate_fn=lambda x: x)
+                        num_workers=0, collate_fn=codec.get_collater())
 
 #  dataset.plot(dataset[0])
 for batch in tqdm(dataloader):
     pass
+    #  print(batch)
