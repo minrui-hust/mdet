@@ -92,6 +92,7 @@ class GroundTruthSampler(object):
         self.sampler_dict = {label: BatchSampler(label, info_list, shuffle=True)
                              for
                              label, info_list in self.label_info_list.items()}
+        print('GroundTruthSampler Initialized !')
 
     def sample_all(self, gt_anno):
         """Sampling all categories of bboxes.
