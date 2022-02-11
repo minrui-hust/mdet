@@ -51,5 +51,5 @@ def points_in_boxes(points, boxes, kdt=None, return_kdt=False):
 
 def remove_points_in_boxes(points, boxes, kdt=None):
     indice_list = points_in_boxes(points, boxes, kdt=kdt)
-    del_indice = np.concatenate(indice_list)
+    del_indice = [] if not indice_list else np.concatenate(indice_list)
     return np.delete(points, del_indice, axis=0)
