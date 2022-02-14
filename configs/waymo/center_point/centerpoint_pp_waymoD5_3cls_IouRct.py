@@ -3,6 +3,7 @@ from mdet.utils.global_config import GCFG
 
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
+num_workers = GCFG['num_workers'] or 4
 max_epochs = GCFG['max_epochs'] or 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
@@ -201,7 +202,7 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.003 / 4 * batch_size * lr_scale,
+        max_lr=(0.003 / 16) * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
