@@ -10,20 +10,18 @@ dataset_root = GCFG['dataset_root'] or '/data/waymo'
 # global config
 labels = [('Vehicle', [1]), ('Cyclist', [4]), ('Pedestrian', [2])]
 
-point_range = [-74.88, -74.88, -2, 74.88, 74.88, 4.0]
-voxel_size = [0.32, 0.32, 6.0]
-voxel_reso = [468, 468, 1]
+point_range = [-75.2, -75.2, -2, 75.2, 75.2, 4.0]
+voxel_size = [0.1, 0.1, 0.15]
+voxel_reso = [1504, 1504, 40]
 
-out_grid_size = [0.32, 0.32]
-out_grid_reso = [468, 468]
+# 8x times downsample
+out_grid_size = [0.8, 0.8]
+out_grid_reso = [188, 188]
 
 point_dim = 5
 
-margin = 1.0
-box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin,
-             point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
-
 # model config
+# model for training
 model_train = dict(
     type='Det3dOneStage',
     voxelization=dict(
@@ -31,39 +29,31 @@ model_train = dict(
         point_range=point_range,
         voxel_size=voxel_size,
         voxel_reso=voxel_reso,
-        max_points=20,
-        max_voxels=32000,
+        max_points=5,
+        max_voxels=150000,
+        reduce_type='mean',
     ),
     backbone3d=dict(
-        type='PillarFeatureNet',
-        pillar_feat=[
-            ('position', 3),
-            ('attribute', point_dim-3),
-            ('center_offset', 2),
-            ('mean_offset', 3),
-            #  ('distance', 1),
-        ],
-        voxel_reso=voxel_reso,
-        voxel_size=voxel_size,
-        point_range=point_range,
-        pfn_channels=[64, 64, ],
+        type='SparseResNetFHD',
+        in_channels=point_dim,
+        # out_channels=256,
     ),
     backbone2d=dict(
         type='SECOND',
-        layer_nums=[3, 5, 5],
-        layer_strides=[1, 2, 2],
-        out_channels=[64, 128, 256],
-        in_channels=64,
+        in_channels=256,
+        layer_nums=[5, 5],
+        layer_strides=[1, 2],
+        out_channels=[128, 256],
     ),
     neck=dict(
         type='SECONDFPN',
-        in_channels=[64, 128, 256],
-        out_channels=[128, 128, 128],
-        upsample_strides=[1, 2, 4],
+        in_channels=[128, 256],
+        out_channels=[256, 256],
+        upsample_strides=[1, 2],
     ),
     head=dict(
         type='CenterHead',
-        in_channels=3 * 128,
+        in_channels=2 * 256,
         shared_conv_channels=64,
         init_bias=-2.19,
         heads={
@@ -76,10 +66,11 @@ model_train = dict(
     ),
 )
 
+# model for evaluation
 model_eval = _deepcopy(model_train)
-model_eval['voxelization']['max_voxels'] = 60000
 
-model_infer = _deepcopy(model_train)
+# model for inference(export)
+model_infer = _deepcopy(model_eval)
 
 
 # codecs config
@@ -91,18 +82,14 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
+        min_gaussian_radius=2,
+        min_gaussian_overlap=0.1,
         labels=labels,
-        heatmap_encoder=dict(
-            type='NaiveGaussianBoxHeatmapEncoder',
-            grid=out_grid_size[0],
-            min_radius=2,
-            min_overlap=0.1,
-        ),
     ),
     decode_cfg=dict(
         nms_cfg=dict(
             pre_num=4096,
-            post_num=500,
+            post_num=512,
             overlap_thresh=0.7,
         ),
         valid_thresh=0.1,
@@ -123,7 +110,6 @@ codec_train = dict(
 codec_eval = _deepcopy(codec_train)
 
 codec_infer = _deepcopy(codec_eval)
-codec_infer['encode_cfg']['encode_anno'] = False
 
 
 # data config
@@ -153,7 +139,7 @@ dataloader_train = dict(
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
-            dict(type='PcdRangeFilter', box_range=box_range),
+            dict(type='PcdRangeFilter', point_range=point_range),
             dict(type='PcdShuffler'),
         ],
         #  filter=dict(type='IntervalDownsampler', interval=5),
@@ -165,7 +151,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdIntensityNormlizer'),
-    dict(type='PcdRangeFilter', box_range=box_range),
+    dict(type='PcdRangeFilter', point_range=point_range),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None
@@ -181,8 +167,8 @@ model = dict(
 
 codec = dict(
     train=codec_train,
-    eval=codec_eval,
-    infer=codec_infer,
+    eval=codec_train,
+    infer=codec_train,
 )
 
 data = dict(
@@ -200,7 +186,7 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.003 / 4 * batch_size * lr_scale,
+        max_lr=0.003 * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,
@@ -208,7 +194,6 @@ fit = dict(
     ),
     grad_clip=dict(type='norm', value=35),
 )
-
 
 runtime = dict(
     train=dict(

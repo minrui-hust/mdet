@@ -1,7 +1,6 @@
 import math
 import math
 import os
-import tempfile
 
 import numpy as np
 from tqdm import tqdm
@@ -28,11 +27,11 @@ class WaymoDet3dDataset(MDet3dDataset):
         self.load_opt = load_opt
 
         self.labels_name = {}
-        self.interest_types = set()
-        for label, (name, type_list) in enumerate(load_opt['labels']):
-            self.labels_name[label] = name
+        self.type2label = {}
+        for label_id, (name, type_list) in enumerate(load_opt['labels']):
+            self.labels_name[label_id] = name
             for type in type_list:
-                self.interest_types.add(type)
+                self.type2label[type] = label_id
 
         self.pcd_loader = WaymoNSweepLoader(
             load_opt['load_dim'], load_opt['nsweep'])
@@ -45,8 +44,11 @@ class WaymoDet3dDataset(MDet3dDataset):
         sample_name = f'{seq_name}-{frame_id}'
 
         # update sample's meta
-        sample['meta'] = dict(seq_name=seq_name, frame_id=frame_id,
-                              stamp=stamp, labels_name=self.labels_name)
+        sample['meta'] = dict(seq_name=seq_name,
+                              frame_id=frame_id,
+                              stamp=stamp,
+                              labels_name=self.labels_name,
+                              type2label=self.type2label)
 
     def load_data(self, sample, info):
         # load pcd
@@ -63,7 +65,7 @@ class WaymoDet3dDataset(MDet3dDataset):
         num_points = np.empty((0, ), dtype=np.int32)
         box_list, type_list, num_points_list = [], [], []
         for object in anno['objects']:
-            if object['type'] in self.interest_types:
+            if object['type'] in self.type2label:
                 box_list.append(self._normlize_box(object['box']))
                 type_list.append(object['type'])
                 num_points_list.append(object['num_points'])

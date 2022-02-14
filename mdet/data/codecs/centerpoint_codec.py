@@ -10,7 +10,6 @@ from mdet.core.annotation import Annotation3d
 import mdet.model.loss.loss as loss
 from mdet.ops.iou3d import nms_bev, iou_bev
 from mdet.utils.factory import FI
-from mdet.utils.gaussian import draw_gaussian, gaussian_radius
 
 from .base_codec import BaseCodec
 
@@ -23,7 +22,6 @@ class CenterPointCodec(BaseCodec):
     size is in log format
     '''
 
-    #  def __init__(self, point_range, grid_size, grid_reso, min_gaussian_radius=1, min_gaussian_overlap=0.5, data_enable=True, anno_enable=True):
     def __init__(self, encode_cfg, decode_cfg, loss_cfg, mode='train'):
         super().__init__(encode_cfg, decode_cfg, loss_cfg, mode)
 
@@ -36,8 +34,8 @@ class CenterPointCodec(BaseCodec):
         # float [size_x, size_y, size_z]
         self.grid_size = np.array(
             self.encode_cfg['grid_size'], dtype=np.float32)
-        self.min_gaussian_radius = self.encode_cfg['min_gaussian_radius']
-        self.min_gaussian_overlap = self.encode_cfg['min_gaussian_overlap']
+
+        self.heatmap_encoder = FI.create(self.encode_cfg['heatmap_encoder'])
 
         # many raw type may map to same label
         self.type_to_label = {}
@@ -114,12 +112,9 @@ class CenterPointCodec(BaseCodec):
             # skip object out of bound
             if not(center[0] >= 0 and center[0] < self.grid_reso[0] and
                     center[1] >= 0 and center[1] < self.grid_reso[1]):
-                continue
+                raise AssertionError(f'center: {center}, box: {boxes[i]}')
 
-            l, w = box[3] / self.grid_size[0], box[4] / self.grid_size[1]
-            radius = gaussian_radius((l, w), self.min_gaussian_overlap)
-            radius = max(self.min_gaussian_radius, int(radius))
-            draw_gaussian(heatmap[label], center, radius)
+            self.heatmap_encoder(heatmap[label], box, center)
 
         sample['gt'] = dict(offset=torch.from_numpy(offset),
                             height=torch.from_numpy(height),

@@ -1,6 +1,16 @@
-from mdet.utils.factory import FI
 import numpy as np
-from mdet.core.box_np_ops import rotate2d
+
+from mdet.core.geometry3d import remove_points_in_boxes, points_in_boxes, remove_points_in_boxes
+
+
+from mdet.data.transforms.transform_utils import (
+    noise_per_box,
+    transform_boxes,
+    transform_points,
+)
+from mdet.utils.factory import FI
+
+import time
 
 
 @FI.register
@@ -9,15 +19,15 @@ class PcdRangeFilter(object):
     Filter out the out of range object
     '''
 
-    def __init__(self, point_range):
+    def __init__(self, box_range):
         super().__init__()
-        self.point_range = np.array(point_range, dtype=np.float32)
+        self.box_range = np.array(box_range, dtype=np.float32)
 
     def __call__(self, sample, info):
-        x_min = self.point_range[0]
-        y_min = self.point_range[1]
-        x_max = self.point_range[3]
-        y_max = self.point_range[4]
+        x_min = self.box_range[0]
+        y_min = self.box_range[1]
+        x_max = self.box_range[3]
+        y_max = self.box_range[4]
 
         boxes = sample['anno'].boxes
 
@@ -56,7 +66,8 @@ class PcdShuffler(object):
         super().__init__()
 
     def __call__(self, sample, info):
-        sample['data']['pcd'].points = np.random.permutation(sample['data']['pcd'].points)
+        sample['data']['pcd'].points = np.random.permutation(
+            sample['data']['pcd'].points)
 
 
 @FI.register
@@ -105,7 +116,8 @@ class PcdGlobalTransform(object):
             [[cos_alpha, -sin_alpha], [sin_alpha, cos_alpha]], dtype=np.float32)
 
         # rotate points
-        sample['data']['pcd'].points[:, :2] = sample['data']['pcd'].points[:, :2] @ rotm
+        sample['data']['pcd'].points[:,
+                                     :2] = sample['data']['pcd'].points[:, :2] @ rotm
 
         #  rotate boxes center
         sample['anno'].boxes[:, :2] = sample['anno'].boxes[:, :2] @ rotm
@@ -181,8 +193,62 @@ class PcdObjectSampler(object):
         sample['anno'] += sampled['sample_anno']
 
         # remove points in sampled boxes
-        sample['data']['pcd'].remove_points_in_boxes(
-            sampled['sample_anno'].boxes)
+        sample['data']['pcd'].points = remove_points_in_boxes(
+            sample['data']['pcd'].points, sampled['sample_anno'].boxes)
 
         # add points in sampled boxes
         sample['data']['pcd'] += sampled['sample_pcd']
+
+
+@FI.register
+class PcdLocalTransform(object):
+    r'''
+    Apply local transform to each ground truth object
+    '''
+
+    def __init__(self, translation_std=[0, 0, 0], rot_range=[-0.78539816, 0.78539816], num_try=50):
+        super().__init__()
+
+        self.translation_std = np.array(translation_std, dtype=np.float32)
+        self.rot_range = rot_range
+        self.num_try = num_try
+
+    def __call__(self, sample, info):
+        boxes = sample['anno'].boxes
+        points = sample['data']['pcd'].points
+
+        num_boxes = boxes.shape[0]
+
+        loc_noises = np.random.normal(
+            scale=self.translation_std, size=[num_boxes, self.num_try, 3]).astype(np.float32)
+        angle_noises = np.random.uniform(
+            self.rot_range[0], self.rot_range[1], size=[num_boxes, self.num_try]).astype(np.float32)
+        rot_noises = np.stack(
+            [np.cos(angle_noises), np.sin(angle_noises)], axis=-1)
+
+        noise_indices = noise_per_box(boxes, loc_noises, rot_noises)[
+            :, np.newaxis, np.newaxis]
+
+        loc_noises = np.take_along_axis(loc_noises, np.broadcast_to(
+            noise_indices, (num_boxes, 1, 3)), axis=1).squeeze(1)
+        rot_noises = np.take_along_axis(rot_noises, np.broadcast_to(
+            noise_indices, (num_boxes, 1, 2)), axis=1).squeeze(1)
+
+        indice_list_raw, kdt = points_in_boxes(points, boxes, return_kdt=True)
+
+        # transform boxes
+        transform_boxes(boxes, loc_noises, rot_noises)
+        indice_list_new = points_in_boxes(points, boxes, kdt=kdt)
+
+        # get trasformed boxes' points
+        box_points_list = [points[idx] for idx in indice_list_raw]
+        transform_points(box_points_list, boxes[:, :3], loc_noises, rot_noises)
+        boxes_points = np.concatenate(box_points_list, axis=0)
+
+        # remove points in boxes(extract back ground points)
+        del_indice = np.concatenate(indice_list_raw + indice_list_new)
+        bg_points = np.delete(points, del_indice, axis=0)
+
+        # concatenate back ground points and boxes' points
+        sample['data']['pcd'].points = np.concatenate(
+            [bg_points, boxes_points], axis=0)

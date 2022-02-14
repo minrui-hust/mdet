@@ -5,7 +5,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-from mdet.core.box_np_ops import points_in_box
+from mdet.core.box_np_ops import points_in_boxes
 from mdet.utils.factory import FI
 import mdet.utils.io as io
 import mdet.utils.rigid as rigid
@@ -126,7 +126,7 @@ def create_gt_database_one_seq(seq_item, root_path, split):
         objects_box = normlize_boxes(np.stack(objects_box_list, axis=0))
 
         pcd = io.load(pcd_path, compress=True)
-        point_indices = points_in_box(pcd, objects_box)
+        point_indices = points_in_boxes(pcd, objects_box)
 
         for object_id in range(objects_box.shape[0]):
             object_pcd = pcd[point_indices[:, object_id]]
@@ -166,7 +166,8 @@ def summary_gt_database(root_path, split, nsweep=2):
             type = object['type']
             object_id = object['name']
             num_points = object['num_points']
-            sweeps = dict(prefix=gt_database_folder, seq_id=seq_id, frame_id=frame_id, object_id=object_id)
+            sweeps = dict(prefix=gt_database_folder, seq_id=seq_id,
+                          frame_id=frame_id, object_id=object_id)
 
             object_info_dict[type].append(dict(box=objects_box[i],
                                                type=type,
@@ -190,7 +191,6 @@ def sort_frame(frame_name_list):
     seq_frame_list.sort()
 
     return [f'{p[0]}-{p[1]}.pkl' for p in seq_frame_list]
-
 
 
 def normlize_boxes(boxes):

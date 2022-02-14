@@ -20,7 +20,7 @@ out_grid_reso = [468, 468]
 point_dim = 5
 
 margin = 1.0
-box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin,
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin, 
              point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
 
 # model config
@@ -91,6 +91,8 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
+        min_gaussian_radius=2,
+        min_gaussian_overlap=0.1,
         labels=labels,
         heatmap_encoder=dict(
             type='NaiveGaussianBoxHeatmapEncoder',
@@ -130,10 +132,10 @@ codec_infer['encode_cfg']['encode_anno'] = False
 db_sampler = dict(
     type='GroundTruthSampler',
     info_path=f'{dataset_root}/training_info_gt.pkl',
-    sample_groups={'Vehicle': 15, 'Cyclist': 10, 'Pedestrian': 10},
+    sample_groups=[('Vehicle', 15), ('Pedestrian', 10), ('Cyclist', 10)],
     labels=labels,
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
-    filter=dict(type='FilterByNumpoints', min_num_points=5),
+    filters=[dict(type='FilterByNumpoints', min_num_points=5), ],
 )
 
 dataloader_train = dict(
@@ -146,17 +148,17 @@ dataloader_train = dict(
         info_path=f'{dataset_root}/training_info.pkl',
         load_opt=dict(load_dim=point_dim, nsweep=1, labels=labels,),
         transforms=[
-            dict(type='PcdIntensityNormlizer'),
-            #  dict(type='PcdObjectSampler', db_sampler=db_sampler),
+            dict(type='PcdObjectSampler', db_sampler=db_sampler),
             dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
             dict(type='PcdGlobalTransform',
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', box_range=box_range),
+            dict(type='PcdIntensityNormlizer'),
             dict(type='PcdShuffler'),
         ],
-        #  filter=dict(type='IntervalDownsampler', interval=5),
+        filter=dict(type='IntervalDownsampler', interval=5),
     ),
 )
 
@@ -200,7 +202,7 @@ fit = dict(
     ),
     scheduler=dict(
         type='OneCycleLR',
-        max_lr=0.003 / 4 * batch_size * lr_scale,
+        max_lr=(0.003 / 16) * batch_size * lr_scale,
         base_momentum=0.85,
         max_momentum=0.95,
         div_factor=10.0,

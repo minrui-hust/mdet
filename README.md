@@ -1,1 +1,2 @@
 #TODO
+set OPENBLAS_NUM_THREADS=1 is faster
