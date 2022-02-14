@@ -19,6 +19,10 @@ out_grid_reso = [468, 468]
 
 point_dim = 5
 
+margin = 1.0
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin, 
+             point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
+
 # model config
 model_train = dict(
     type='Det3dOneStage',
@@ -68,7 +72,7 @@ model_train = dict(
             'height': (1, 2),
             'size': (3, 2),
             'heading': (2, 2),
-            'iou': (len(labels), 2),
+            'iou': (1, 2),
         },  # (output_channel, num_conv)
     ),
 )
@@ -88,9 +92,13 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
-        min_gaussian_radius=2,
-        min_gaussian_overlap=0.1,
         labels=labels,
+        heatmap_encoder=dict(
+            type='NaiveGaussianBoxHeatmapEncoder',
+            grid=out_grid_size[0],
+            min_radius=2,
+            min_overlap=0.1,
+        ),
     ),
     decode_cfg=dict(
         nms_cfg=dict(
@@ -106,20 +114,17 @@ codec_train = dict(
             'height': 1 * 2.0,
             'size': 3 * 2.0,
             'heading': 2 * 2.0,
-            'iou': 1.0,
+            'iou': 1 * 2.0,
         },
         alpha=2.0,
         beta=4.0,
     ),
-    mode='train',
 )
 
 codec_eval = _deepcopy(codec_train)
-codec_eval['mode'] = 'eval'
 
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
-codec_infer['mode'] = 'infer'
 
 
 # data config
@@ -149,7 +154,7 @@ dataloader_train = dict(
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
-            dict(type='PcdRangeFilter', point_range=point_range),
+            dict(type='PcdRangeFilter', box_range=box_range),
             dict(type='PcdShuffler'),
         ],
         filter=dict(type='IntervalDownsampler', interval=5),
@@ -161,7 +166,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdIntensityNormlizer'),
-    dict(type='PcdRangeFilter', point_range=point_range),
+    dict(type='PcdRangeFilter', box_range=box_range),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None

@@ -31,8 +31,13 @@ class PlWrapper(pl.LightningModule):
 
         # codec
         self.train_codec = FI.create(config['codec']['train'])
+        self.train_codec.set_train()
+
         self.eval_codec = FI.create(config['codec']['eval'])
+        self.eval_codec.set_eval()
+
         self.infer_codec = FI.create(config['codec']['infer'])
+        self.infer_codec.set_infer()
 
         # dataset
         self.train_dataset = FI.create(config['data']['train']['dataset'])

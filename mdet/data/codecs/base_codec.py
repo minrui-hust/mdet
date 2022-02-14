@@ -16,12 +16,24 @@ class BaseCodec(object):
                  encode_cfg={'encode_data': True, 'encode_anno': True},
                  decode_cfg={},
                  loss_cfg={},
-                 mode='train',  # or 'eval', 'infer'
                  ):
         super().__init__()
+        self.mode = 'train'
         self.encode_cfg = encode_cfg
         self.decode_cfg = decode_cfg
         self.loss_cfg = loss_cfg
+
+    def set_train(self):
+        self.set_mode('train')
+
+    def set_eval(self):
+        self.set_mode('eval')
+
+    def set_infer(self):
+        self.set_mode('infer')
+
+    def set_mode(self, mode):
+        assert(mode in ['train', 'eval', 'infer'])
         self.mode = mode
 
     def encode(self, sample, info):

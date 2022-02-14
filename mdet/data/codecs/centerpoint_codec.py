@@ -22,8 +22,8 @@ class CenterPointCodec(BaseCodec):
     size is in log format
     '''
 
-    def __init__(self, encode_cfg, decode_cfg, loss_cfg, mode='train'):
-        super().__init__(encode_cfg, decode_cfg, loss_cfg, mode)
+    def __init__(self, encode_cfg, decode_cfg, loss_cfg):
+        super().__init__(encode_cfg, decode_cfg, loss_cfg)
 
         # for encode
         # float [x_min, y_min, z_min, x_max, y_max, z_max]
@@ -302,52 +302,41 @@ class CenterPointCodec(BaseCodec):
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             else:
+                positive_prediction = head_prediction[positive_index[:, 0],
+                                                      :,
+                                                      positive_index[:, 1],
+                                                      positive_index[:, 2]]
                 if head_name == 'iou':
-                    if len(positive_index) > 0:
-                        # shape Nx8
-                        gt_encoded_boxes = torch.cat([
-                            batch['gt']['offset'],
-                            batch['gt']['height'],
-                            batch['gt']['size'],
-                            batch['gt']['heading'],
-                        ], dim=-1)
-                        positive_gt_boxes = self.decode_box(gt_encoded_boxes.unsqueeze(
-                            0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
+                    # shape Nx8
+                    gt_encoded_boxes = torch.cat([
+                        batch['gt']['offset'],
+                        batch['gt']['height'],
+                        batch['gt']['size'],
+                        batch['gt']['heading'],
+                    ], dim=-1)
+                    positive_gt_boxes = self.decode_box(gt_encoded_boxes.unsqueeze(
+                        0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
 
-                        pred_encoded_boxes = torch.cat([
-                            output['offset'],
-                            output['height'],
-                            output['size'],
-                            output['heading'],
-                        ], dim=1).detach()  # detach here
-                        pred_encoded_boxes = pred_encoded_boxes[positive_index[:, 0],
-                                                                :,
-                                                                positive_index[:, 1],
-                                                                positive_index[:, 2]]
-                        positive_pred_boxes = self.decode_box(
-                            pred_encoded_boxes.unsqueeze(0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
+                    pred_encoded_boxes = torch.cat([
+                        output['offset'],
+                        output['height'],
+                        output['size'],
+                        output['heading'],
+                    ], dim=1).detach()  # !!! detach here
+                    pred_encoded_boxes = pred_encoded_boxes[positive_index[:, 0],
+                                                            :,
+                                                            positive_index[:, 1],
+                                                            positive_index[:, 2]]
+                    positive_pred_boxes = self.decode_box(
+                        pred_encoded_boxes.unsqueeze(0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
 
-                        positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
-                                                  positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
-                        # encode iou to range [-1, 1]
-                        positive_gt_iou = 2 * (positive_gt_iou - 0.5)
-
-                        positive_pred_iou = head_prediction[positive_heatmap_index[:, 0],
-                                                            positive_heatmap_index[:, 1],
-                                                            positive_heatmap_index[:, 2],
-                                                            positive_heatmap_index[:, 3]]
-                    else:
-                        positive_pred_iou = output['heatmap'].new_empty((0,))
-                        positive_gt_iou = output['heatmap'].new_empty((0,))
-                    positive_prediction, positive_gt = positive_pred_iou, positive_gt_iou
+                    positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
+                                              positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
+                    # encode iou to range [-1, 1]
+                    positive_gt = 2 * (positive_gt_iou.unsqueeze(-1) - 0.5)
                 else:
-                    positive_prediction = head_prediction[positive_index[:, 0],
-                                                          :,
-                                                          positive_index[:, 1],
-                                                          positive_index[:, 2]]
                     positive_gt = batch['gt'][head_name]
-                loss = self.criteria_regression(
-                    positive_prediction, positive_gt)
+                loss = self.criteria_regression(positive_prediction, positive_gt)
             loss_dict[f'loss_{head_name}'] = loss
 
         # calc the total loss of different heads
@@ -478,6 +467,10 @@ class CenterPointCodec(BaseCodec):
         grid_offset = torch.from_numpy(grid_offset).to(boxes.device)
         grid_size = torch.from_numpy(self.grid_size[:2]).to(boxes.device)
         grid_reso = torch.from_numpy(self.grid_reso[:2]).to(boxes.device)
+
+        # in case of empty boxes
+        if boxes.shape[0] * boxes.shape[1] == 0:
+            return boxes.new_empty((boxes.shape[0], boxes.shape[1], 8))
 
         # if is B x N, convert to B x N x 2
         if cords.dim() == 2:

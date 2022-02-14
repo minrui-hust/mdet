@@ -46,5 +46,6 @@ nms_bev = _nms_bev.apply
 
 def iou_bev(pboxes, qboxes):
     iou = pboxes.new_empty(pboxes.size(0))
-    OpIOUBEV(pboxes, qboxes, iou)
+    if iou.size(0) > 0:
+        OpIOUBEV(pboxes, qboxes, iou)
     return iou
