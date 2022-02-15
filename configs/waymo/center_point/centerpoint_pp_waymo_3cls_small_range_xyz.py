@@ -3,6 +3,7 @@ from mdet.utils.global_config import GCFG
 
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
+num_workers = GCFG['num_workers'] or 4
 max_epochs = GCFG['max_epochs'] or 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
@@ -17,7 +18,7 @@ voxel_reso = [372, 372, 1]
 out_grid_size = [0.32, 0.32]
 out_grid_reso = [372, 372]
 
-point_dim = 4
+point_dim = 3
 
 margin = 5.0
 
@@ -36,7 +37,7 @@ model_train = dict(
         type='PillarFeatureNet',
         pillar_feat=[
             ('position', 3),
-            ('attribute', point_dim-3),
+            #  ('attribute', point_dim-3),
             ('center_offset', 2),
             ('mean_offset', 3),
             #  ('distance', 1),
@@ -141,16 +142,16 @@ db_sampler = dict(
     pcd_loader=dict(type='WaymoObjectNSweepLoader',
                     load_dim=point_dim, nsweep=1),
     filters=[
-        dict(type='FilterByNumpoints', min_num_points=5),
+        dict(type='FilterByNumpoints', min_num_points=20),
         dict(type='FilterByRange', range=point_range),
     ],
 )
 
 dataloader_train = dict(
     batch_size=batch_size,
-    num_workers=8,
+    num_workers=num_workers,
     shuffle=True,
-    pin_memory=True,
+    pin_memory=False,
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path=f'{dataset_root}/training_info.pkl',
@@ -163,7 +164,7 @@ dataloader_train = dict(
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-            dict(type='PcdIntensityNormlizer'),
+            #  dict(type='PcdIntensityNormlizer'),
             dict(type='PcdShuffler'),
         ],
         #  filter=dict(type='IntervalDownsampler', interval=5),
@@ -175,7 +176,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-    dict(type='PcdIntensityNormlizer'),
+    #  dict(type='PcdIntensityNormlizer'),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None

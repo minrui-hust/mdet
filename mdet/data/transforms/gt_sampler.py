@@ -218,3 +218,24 @@ class FilterByNumpoints(object):
 
     def __call__(self, info_list):
         return [info for info in info_list if info['num_points'] > self.min_num_points]
+
+
+@FI.register
+class FilterByRange(object):
+    r'''
+    filter ground truths by num points
+    '''
+
+    def __init__(self, range=[]):
+        super().__init__()
+        self.x_min = range[0]
+        self.y_min = range[1]
+        self.x_max = range[3]
+        self.y_max = range[4]
+
+    def __call__(self, info_list):
+        return [info for info in info_list if self.in_range(info)]
+
+    def in_range(self, info):
+        box = info['box']
+        return box[0] > self.x_min and box[0] < self.x_max and box[1] > self.y_min and box[1] < self.y_max

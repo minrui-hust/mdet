@@ -19,27 +19,32 @@ class PcdRangeFilter(object):
     Filter out the out of range object
     '''
 
-    def __init__(self, box_range):
+    def __init__(self, point_range, margin):
         super().__init__()
-        self.box_range = np.array(box_range, dtype=np.float32)
+        self.point_range = point_range
+        self.margin = margin
 
     def __call__(self, sample, info):
-        x_min = self.box_range[0]
-        y_min = self.box_range[1]
-        x_max = self.box_range[3]
-        y_max = self.box_range[4]
+        x_min = self.point_range[0]
+        y_min = self.point_range[1]
+        x_max = self.point_range[3]
+        y_max = self.point_range[4]
+
+        points = sample['data']['pcd'].points
+
+        points_mask = (points[:, 0] > x_min) & (points[:, 0] < x_max) & (
+            points[:, 1] > y_min) & (points[:, 1] < y_max)
+
+        # update points
+        sample['data']['pcd'].points = points[points_mask]
 
         boxes = sample['anno'].boxes
 
-        valid_indices = []
-        for i, box in enumerate(boxes):
-            if not(box[0] > x_min and box[0] < x_max and box[1] > y_min and box[1] < y_max):
-                continue
-            else:
-                valid_indices.append(i)
+        boxes_mask = (boxes[:, 0] > x_min+self.margin) & (boxes[:, 0] < x_max - self.margin) & (
+            boxes[:, 1] > y_min+self.margin) & (boxes[:, 1] < y_max-self.margin)
 
-        # update sample
-        sample['anno'] = sample['anno'][valid_indices]
+        # update anno
+        sample['anno'] = sample['anno'][boxes_mask]
 
 
 @FI.register
