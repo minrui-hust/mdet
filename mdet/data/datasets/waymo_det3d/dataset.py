@@ -53,6 +53,7 @@ class WaymoDet3dDataset(MDet3dDataset):
     def load_data(self, sample, info):
         # load pcd
         pcd = self.pcd_loader(info['sweeps'])
+        print(pcd.points.shape)
 
         # update sample's data
         sample['data'] = dict(pcd=pcd)

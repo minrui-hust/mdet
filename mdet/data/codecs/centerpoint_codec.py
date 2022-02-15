@@ -271,21 +271,10 @@ class CenterPointCodec(BaseCodec):
                 self.decode_cfg['nms_cfg']['post_num'],
             )
             keep_indices = keep_indices.long()
-            if not infer:
-                valid_indices = keep_indices[:valid_num]
-                det_box = topk_boxes[i][valid_indices].cpu().numpy()
-                det_label = topk_label[i][valid_indices].cpu().numpy()
-                det_score = topk_score[i][valid_indices].cpu().numpy()
-                det_type = np.array([self.label_to_type[label]
-                                    for label in det_label], dtype=np.int32)
-                mask = det_score > self.valid_thresh
-                pred = Annotation3d(
-                    boxes=det_box[mask], types=det_type[mask], scores=det_score[mask])
-            else:
-                det_box = topk_boxes[i][keep_indices]
-                det_label = topk_label[i][keep_indices]
-                det_score = topk_score[i][keep_indices]
-                pred = (det_box, det_score, det_label, valid_num)
+            det_box = topk_boxes[i][keep_indices]
+            det_label = topk_label[i][keep_indices]
+            det_score = topk_score[i][keep_indices]
+            pred = (det_box, det_score, det_label, valid_num)
             pred_list.append(pred)
 
         return pred_list
@@ -336,7 +325,8 @@ class CenterPointCodec(BaseCodec):
                     positive_gt = 2 * (positive_gt_iou.unsqueeze(-1) - 0.5)
                 else:
                     positive_gt = batch['gt'][head_name]
-                loss = self.criteria_regression(positive_prediction, positive_gt)
+                loss = self.criteria_regression(
+                    positive_prediction, positive_gt)
             loss_dict[f'loss_{head_name}'] = loss
 
         # calc the total loss of different heads

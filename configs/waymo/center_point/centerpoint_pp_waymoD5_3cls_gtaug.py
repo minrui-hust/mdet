@@ -20,7 +20,7 @@ out_grid_reso = [468, 468]
 point_dim = 5
 
 margin = 1.0
-box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin, 
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin,
              point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
 
 # model config
@@ -124,7 +124,14 @@ codec_eval = _deepcopy(codec_train)
 
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
-
+codec_infer['decode_cfg'] = dict(
+    nms_cfg=dict(
+        pre_num=1024,
+        post_num=128,
+        overlap_thresh=0.1,
+    ),
+    valid_thresh=0.1,
+)
 
 # data config
 db_sampler = dict(

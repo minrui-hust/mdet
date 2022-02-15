@@ -20,7 +20,7 @@ out_grid_reso = [372, 372]
 point_dim = 4
 
 margin = 1.0
-box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin, 
+box_range = [point_range[0]+margin, point_range[1]+margin, point_range[2]+margin,
              point_range[3]-margin, point_range[4]-margin, point_range[5]-margin]
 
 # model config
@@ -79,7 +79,7 @@ model_train = dict(
 model_eval = _deepcopy(model_train)
 model_eval['voxelization']['max_voxels'] = 50000
 
-model_infer = _deepcopy(model_train)
+model_infer = _deepcopy(model_eval)
 
 
 # codecs config
@@ -91,7 +91,7 @@ codec_train = dict(
         point_range=point_range,
         grid_size=out_grid_size,
         grid_reso=out_grid_reso,
-        labels =labels,
+        labels=labels,
         heatmap_encoder=dict(
             type='NaiveGaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
@@ -124,6 +124,14 @@ codec_eval = _deepcopy(codec_train)
 
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
+codec_infer['decode_cfg'] = dict(
+    nms_cfg=dict(
+        pre_num=1024,
+        post_num=128,
+        overlap_thresh=0.1,
+    ),
+    valid_thresh=0.1,
+)
 
 
 # data config
@@ -132,7 +140,8 @@ db_sampler = dict(
     info_path=f'{dataset_root}/training_info_gt.pkl',
     sample_groups=[('Vehicle', 15), ('Pedestrian', 10), ('Cyclist', 10)],
     labels=labels,
-    pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=point_dim, nsweep=1),
+    pcd_loader=dict(type='WaymoObjectNSweepLoader',
+                    load_dim=point_dim, nsweep=1),
     filters=[dict(type='FilterByNumpoints', min_num_points=5), ],
 )
 

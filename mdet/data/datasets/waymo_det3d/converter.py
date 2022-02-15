@@ -24,11 +24,11 @@ class WaymoDet3dConverter(object):
     def __init__(self):
         super().__init__()
 
-    def __call__(self, raw_root_path, out_root_path, split):
-        convert(raw_root_path, out_root_path, split)
+    def __call__(self, raw_root_path, out_root_path, split, top_only=False, return1_only=False):
+        convert(raw_root_path, out_root_path, split, top_only, return1_only)
 
 
-def convert(raw_root_path, out_root_path, split):
+def convert(raw_root_path, out_root_path, split, top_only=False, return1_only=False):
     record_path = osp.join(raw_root_path, split)
     output_path = osp.join(out_root_path, split)
 
@@ -44,16 +44,16 @@ def convert(raw_root_path, out_root_path, split):
     os.makedirs(anno_path, exist_ok=True)
 
     with mp.Pool(int(mp.cpu_count() / 2)) as p:
-        p.map(partial(convert_one, pcd_path=pcd_path, anno_path=anno_path),
+        p.map(partial(convert_one, pcd_path=pcd_path, anno_path=anno_path, top_only=top_only, return1_only=return1_only),
               record_path_list)
 
 
-def convert_one(record_path, pcd_path, anno_path):
+def convert_one(record_path, pcd_path, anno_path, top_only=False, return1_only=False):
     tf_dataset = tf.data.TFRecordDataset(record_path, compression_type='')
     for frame_id, data in tqdm(enumerate(tf_dataset)):
         frame = dataset_pb2.Frame()
         frame.ParseFromString(bytearray(data.numpy()))
-        points = decode_point(frame)
+        points = decode_point(frame, top_only, return1_only)
         annos = decode_annos(frame, frame_id)
 
         seq_name = annos['seq_name']
@@ -62,7 +62,7 @@ def convert_one(record_path, pcd_path, anno_path):
         io.dump(annos, f'{anno_path}/{seq_name}-{frame_id}.pkl')
 
 
-def decode_point(frame):
+def decode_point(frame, top_only=False, return1_only=False):
     """Decodes native waymo Frame proto to points"""
     def sort_lambda(x):
         return x.name
@@ -73,8 +73,9 @@ def decode_point(frame):
 
     points_list = []
     for laser, calibration in lasers_with_calibration:
-        points_list.extend(
-            extract_points_from_range_image(laser, calibration, frame.pose))
+        if (not top_only) or (laser.name == dataset_pb2.LaserName.TOP):
+            points_list.extend(
+                extract_points_from_range_image(laser, calibration, frame.pose, return1_only))
 
     return np.concatenate(points_list, axis=0)
 
@@ -95,7 +96,7 @@ def decode_annos(frame, frame_id):
     return annos
 
 
-def extract_points_from_range_image(laser, calibration, frame_pose):
+def extract_points_from_range_image(laser, calibration, frame_pose, return1_only=False):
     """Decode points from lidar."""
     if laser.name != calibration.name:
         raise ValueError('Laser and calibration do not match')
@@ -126,10 +127,11 @@ def extract_points_from_range_image(laser, calibration, frame_pose):
     else:
         pixel_pose = None
         frame_pose = None
-    first_return = zlib.decompress(laser.ri_return1.range_image_compressed)
-    second_return = zlib.decompress(laser.ri_return2.range_image_compressed)
+    returns = [zlib.decompress(laser.ri_return1.range_image_compressed)]
+    if not return1_only:
+        returns.append(zlib.decompress(laser.ri_return2.range_image_compressed))
     points_list = []
-    for range_image_str in [first_return, second_return]:
+    for range_image_str in returns:
         range_image = dataset_pb2.MatrixFloat.FromString(range_image_str)
         if not calibration.beam_inclinations:
             beam_inclinations = range_image_utils.compute_inclination(
