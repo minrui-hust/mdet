@@ -48,17 +48,55 @@ class PcdRangeFilter(object):
 
 
 @FI.register
+class PointNumFilter(object):
+    r'''
+    Filter out the box with too less points
+    '''
+
+    def __init__(self, groups={}):
+        super().__init__()
+        self.groups = groups
+
+    def __call__(self, sample, info):
+        labels_name = sample['meta']['labels_name']
+        type2label = sample['meta']['type2label']
+
+        label_min_points = {}
+        type_min_points = {}
+
+        for label_name, min_points in self.groups.items():
+            label = labels_name.index(label_name)
+            label_min_points[label] = min_points
+
+        for type, type_label in type2label.items():
+            type_min_points[type] = label_min_points[type_label]
+
+        num_points = sample['anno'].num_points
+        types = sample['anno'].types
+
+        boxes_mask = []
+        for i in range(len(types)):
+            point_num = num_points[i]
+            type = types[i]
+            if point_num >= type_min_points[type]:
+                boxes_mask.append(i)
+
+        sample['anno'] = sample['anno'][boxes_mask]
+
+
+@FI.register
 class PcdIntensityNormlizer(object):
     r'''
     Normalize the pcd intensity field to a valid range
     '''
 
-    def __init__(self):
+    def __init__(self, scale=1.0):
         super().__init__()
+        self.scale = scale
 
     def __call__(self, sample, info):
         points = sample['data']['pcd'].points
-        points[:, 3] = np.tanh(points[:, 3])
+        points[:, 3] = np.tanh(points[:, 3]*self.scale)
 
 
 @FI.register

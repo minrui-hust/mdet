@@ -85,7 +85,7 @@ class GroundTruthSampler(object):
                 continue
             label = self.type2label[type]
             for filter in self.filters:
-                info_list = filter(info_list)
+                info_list = filter(info_list, type, label)
             self.label_info_list[label].extend(info_list)
 
         # sampler of different label
@@ -202,7 +202,7 @@ class FilterByDifficulty(object):
         super().__init__()
         self.difficulties_to_remove = difficulties_to_remove
 
-    def __call__(self, info_list):
+    def __call__(self, info_list, type, label_name):
         return [info for info in info_list if info['difficulty'] not in self.difficulties_to_remove]
 
 
@@ -212,12 +212,13 @@ class FilterByNumpoints(object):
     filter ground truths by num points
     '''
 
-    def __init__(self, min_num_points=1):
+    def __init__(self, min_points_groups):
         super().__init__()
-        self.min_num_points = min_num_points
+        self.min_points_groups = min_points_groups
 
-    def __call__(self, info_list):
-        return [info for info in info_list if info['num_points'] > self.min_num_points]
+    def __call__(self, info_list, type, label_name):
+        min_points = self.min_points_groups[label_name]
+        return [info for info in info_list if info['num_points'] > min_points]
 
 
 @FI.register
@@ -233,7 +234,7 @@ class FilterByRange(object):
         self.x_max = range[3]
         self.y_max = range[4]
 
-    def __call__(self, info_list):
+    def __call__(self, info_list, type, label_name):
         return [info for info in info_list if self.in_range(info)]
 
     def in_range(self, info):

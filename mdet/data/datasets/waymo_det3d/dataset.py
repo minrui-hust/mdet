@@ -26,10 +26,10 @@ class WaymoDet3dDataset(MDet3dDataset):
         super().__init__(info_path, transforms, codec, filter)
         self.load_opt = load_opt
 
-        self.labels_name = {}
+        self.labels_name = []
         self.type2label = {}
         for label_id, (name, type_list) in enumerate(load_opt['labels']):
-            self.labels_name[label_id] = name
+            self.labels_name.append(name)
             for type in type_list:
                 self.type2label[type] = label_id
 
