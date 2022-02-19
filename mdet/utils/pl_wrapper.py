@@ -232,7 +232,7 @@ class PlWrapper(pl.LightningModule):
             self.track_model(
                 m_target._modules[name], m_follow._modules[name], f'{name_str}.{name}')
 
-    def export(self, output_file='tmp.onnx', **kwargs):
+    def export_onnx(self, output_file='tmp.onnx', **kwargs):
         # model
         self.cuda()
         self.track_model(self.train_model, self.infer_model)
@@ -256,3 +256,22 @@ class PlWrapper(pl.LightningModule):
                           operator_export_type=torch.onnx.OperatorExportTypes.ONNX,
                           verbose=True,
                           **kwargs)
+
+    def export_torch(self, output_file='tmp.pt', **kwargs):
+        # model
+        self.cuda()
+        self.track_model(self.train_model, self.infer_model)
+
+        # data
+        batch = iter(self.infer_dataloader()).next().select(
+            ['input']).to('cuda')
+
+        input, input_name, output_name, dynamic_axes = self.infer_codec.get_export_info(batch)
+
+        traced_module = torch.jit.trace(self, input)
+
+        print(traced_module.graph)
+
+        traced_module.save(output_file)
+
+

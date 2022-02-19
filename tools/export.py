@@ -34,6 +34,8 @@ def parse_args():
                         help='wether load checkpoint strictly')
     parser.add_argument('--dataset_root', type=str,
                         help='the dataset root folder, this will override config')
+    parser.add_argument(
+        '--type', type=str, choices=['onnx', 'torch'], default='onnx', help='export type')
     return parser.parse_args()
 
 
@@ -73,7 +75,12 @@ def main(args):
     else:
         output_file = args.output
 
-    pl_module.export(output_file=output_file)
+    if args.type == 'onnx':
+        pl_module.export_onnx(output_file=output_file)
+    elif args.type == 'torch':
+        pl_module.export_torch(output_file=output_file)
+    else:
+        raise NotImplementedError
 
 
 if __name__ == '__main__':

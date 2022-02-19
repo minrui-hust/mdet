@@ -277,7 +277,7 @@ class CenterPointCodec(BaseCodec):
             pred = (det_box, det_score, det_label, valid_num)
             pred_list.append(pred)
 
-        return pred_list
+        return pred_list[0]
 
     def loss(self, output, batch):
         positive_index = batch['gt']['positive_indices'].long()

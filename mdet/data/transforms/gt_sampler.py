@@ -217,7 +217,10 @@ class FilterByNumpoints(object):
         self.min_points_groups = min_points_groups
 
     def __call__(self, info_list, type, label_name):
-        min_points = self.min_points_groups[label_name]
+        if isinstance(self.min_points_groups, dict):
+            min_points = self.min_points_groups[label_name]
+        else:
+            min_points = self.min_points_groups
         return [info for info in info_list if info['num_points'] > min_points]
 
 

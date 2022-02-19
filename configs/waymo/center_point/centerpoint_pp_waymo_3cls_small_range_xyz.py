@@ -142,7 +142,7 @@ db_sampler = dict(
     pcd_loader=dict(type='WaymoObjectNSweepLoader',
                     load_dim=point_dim, nsweep=1),
     filters=[
-        dict(type='FilterByNumpoints', min_num_points=20),
+        dict(type='FilterByNumpoints', min_points_groups=20),
         dict(type='FilterByRange', range=point_range),
     ],
 )
