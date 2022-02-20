@@ -32,7 +32,7 @@ class PillarVoxelization(BaseModule):
                      self.max_voxels,
                      self.reduce_type,
                      self.keep_dim)
-            for points in batch['input']['pcd']
+            for points in batch['input']['points']
         ]
 
         # collate voxelization output list

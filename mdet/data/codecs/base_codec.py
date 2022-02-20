@@ -32,8 +32,11 @@ class BaseCodec(object):
     def set_infer(self):
         self.set_mode('infer')
 
+    def set_trt(self):
+        self.set_mode('trt')
+
     def set_mode(self, mode):
-        assert(mode in ['train', 'eval', 'infer'])
+        assert(mode in ['train', 'eval', 'infer', 'trt'])
         self.mode = mode
 
     def encode(self, sample, info):
@@ -56,6 +59,8 @@ class BaseCodec(object):
             return self.decode_train(output, batch)
         elif self.mode == 'eval':
             return self.decode_eval(output, batch)
+        elif self.mode == 'trt':
+            return self.decode_trt(output, batch)
         elif self.mode == 'infer':
             return self.decode_infer(output, batch)
         else:
@@ -68,6 +73,9 @@ class BaseCodec(object):
         raise NotImplementedError
 
     def decode_infer(self, output, batch):
+        raise NotImplementedError
+
+    def decode_trt(self, output, batch):
         raise NotImplementedError
 
     def loss(self, output, batch):

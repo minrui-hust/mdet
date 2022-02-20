@@ -64,7 +64,7 @@ class CenterPointCodec(BaseCodec):
 
     def encode_data(self, sample, info):
         # just pcd for now
-        sample['input'] = dict(pcd=torch.from_numpy(
+        sample['input'] = dict(points=torch.from_numpy(
             sample['data']['pcd'].points))
 
     def encode_anno(self, sample, info):
@@ -213,6 +213,7 @@ class CenterPointCodec(BaseCodec):
 
         heatmap = torch.sigmoid(output['heatmap'])
         B, C, H, W = heatmap.shape
+        assert B == 1
 
         score, label = heatmap.max(dim=1)
         score = score.view(B, H*W)
@@ -278,6 +279,20 @@ class CenterPointCodec(BaseCodec):
             pred_list.append(pred)
 
         return pred_list[0]
+
+    def decode_trt(self, output, batch=None):
+        pred_list = []
+        batch_size = batch['_info_']['size']
+        for i in range(batch_size):
+            valid_num = output['valid'][i]
+            boxes = output['boxes'][i][:valid_num].cpu().numpy()
+            labels = output['label'][i][:valid_num].cpu().numpy()
+            scores = output['score'][i][:valid_num].cpu().numpy()
+            types = np.array([self.label_to_type[label]
+                             for label in labels], dtype=np.int32)
+            pred_list.append(Annotation3d(
+                boxes=boxes, types=types, scores=scores))
+        return pred_list
 
     def loss(self, output, batch):
         positive_index = batch['gt']['positive_indices'].long()

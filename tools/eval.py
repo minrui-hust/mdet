@@ -61,6 +61,8 @@ def parse_args():
                         help='the dataset root folder, this will override config')
     parser.add_argument('--batch_size', type=int,
                         help='override batch in config')
+    parser.add_argument('--trt_engine', type=str, help='tensor rt engine path')
+    parser.add_argument('--trt_plugin', type=str, help='tensor rt plugin path')
     return parser.parse_args()
 
 
@@ -85,6 +87,11 @@ def main(args):
     config['runtime']['eval']['evaluate'] = args.evaluate
     config['runtime']['eval']['evaluate_min_epoch'] = 0
     config['runtime']['eval']['formatted_path'] = args.store_formatted
+
+    if args.trt_engine is not None:
+        config['trt_engine'] = args.trt_engine
+        config['trt_plugin'] = args.trt_plugin
+        print(f'INFO: evaluating in TRT mode!')
 
     interest_set = set()
     epoch_interest_set = set()

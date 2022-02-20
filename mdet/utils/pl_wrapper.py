@@ -72,6 +72,15 @@ class PlWrapper(pl.LightningModule):
         self.evaluate_min_epoch = config['runtime']['eval'].get(
             'evaluate_min_epoch', 0)
 
+        # check if we are doing tensorrt eval
+        self.trt_model = None
+        if 'trt_engine' in config:
+            trt_engine = config['trt_engine']
+            trt_plugin = config.get('trt_plugin', None)
+            from mdet.utils.trt_model import TrtModel
+            self.trt_model = TrtModel(trt_engine, trt_plugin)
+            self.eval_codec.set_trt()
+
     def forward(self, *input):
         # forward is used for export
         output = self.infer_model(*input)
@@ -138,8 +147,6 @@ class PlWrapper(pl.LightningModule):
         sample_list = list(itertools.chain.from_iterable(step_output_list))
 
         # TODO: collate sample_list from other ddp rank
-
-        print(self.current_epoch)
 
         # epoch callback
         if self.eval_epoch_hook is not None:
@@ -210,11 +217,12 @@ class PlWrapper(pl.LightningModule):
         )
 
     def on_validation_start(self):
-        self.track_model(self.train_model, self.eval_model)
+        if self.trt_model is None:  # in case we are in trt eval mode, track is not needed
+            self.track_model(self.train_model, self.eval_model)
 
     @property
     def eval_model(self):
-        return self.util_models['eval_model']
+        return self.trt_model or self.util_models['eval_model']
 
     @property
     def infer_model(self):
@@ -266,12 +274,11 @@ class PlWrapper(pl.LightningModule):
         batch = iter(self.infer_dataloader()).next().select(
             ['input']).to('cuda')
 
-        input, input_name, output_name, dynamic_axes = self.infer_codec.get_export_info(batch)
+        input, input_name, output_name, dynamic_axes = self.infer_codec.get_export_info(
+            batch)
 
         traced_module = torch.jit.trace(self, input)
 
         print(traced_module.graph)
 
         traced_module.save(output_file)
-
-
