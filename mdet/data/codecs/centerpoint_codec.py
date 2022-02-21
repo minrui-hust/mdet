@@ -61,6 +61,8 @@ class CenterPointCodec(BaseCodec):
         self.criteria_heatmap = partial(
             loss.focal_loss, alpha=self.loss_cfg['alpha'], beta=self.loss_cfg['beta'])
         self.criteria_regression = partial(loss.regression_loss, eps=1e-4)
+        self.free_heading_label = self.loss_cfg.get('free_heading_label', None)
+        self.normlize_rot = self.loss_cfg.get('normlize_rot', False)
 
     def encode_data(self, sample, info):
         # just pcd for now
@@ -306,10 +308,13 @@ class CenterPointCodec(BaseCodec):
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             else:
+                # prediction
                 positive_prediction = head_prediction[positive_index[:, 0],
                                                       :,
                                                       positive_index[:, 1],
                                                       positive_index[:, 2]]
+
+                # ground truth
                 if head_name == 'iou':
                     # shape Nx8
                     gt_encoded_boxes = torch.cat([
@@ -340,6 +345,21 @@ class CenterPointCodec(BaseCodec):
                     positive_gt = 2 * (positive_gt_iou.unsqueeze(-1) - 0.5)
                 else:
                     positive_gt = batch['gt'][head_name]
+
+                # special handling of heading
+                if head_name == 'heading':
+                    if self.free_heading_label is not None:
+                        mask = positive_heatmap_index[:,
+                                                      1] != self.free_heading_label
+                        positive_prediction = positive_prediction[mask]
+                        positive_gt = positive_gt[mask]
+                        print(f'free_heading_label:{self.free_heading_label}')
+                    if self.normlize_rot:
+                        mask = positive_prediction[:, 0] < 0
+                        positive_prediction[mask] = -positive_prediction[mask]
+                        positive_gt[mask] = -positive_gt[mask]
+                        print(f'normlize_rot:{self.normlize_rot}')
+
                 loss = self.criteria_regression(
                     positive_prediction, positive_gt)
             loss_dict[f'loss_{head_name}'] = loss
