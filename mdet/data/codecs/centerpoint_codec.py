@@ -353,12 +353,10 @@ class CenterPointCodec(BaseCodec):
                                                       1] != self.free_heading_label
                         positive_prediction = positive_prediction[mask]
                         positive_gt = positive_gt[mask]
-                        print(f'free_heading_label:{self.free_heading_label}')
                     if self.normlize_rot:
                         mask = positive_prediction[:, 0] < 0
                         positive_prediction[mask] = -positive_prediction[mask]
                         positive_gt[mask] = -positive_gt[mask]
-                        print(f'normlize_rot:{self.normlize_rot}')
 
                 loss = self.criteria_regression(
                     positive_prediction, positive_gt)
