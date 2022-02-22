@@ -2,7 +2,7 @@ import numpy as np
 
 
 class Annotation3d(object):
-    def __init__(self, boxes, types, scores=None, num_points=None):
+    def __init__(self, boxes=np.empty((0, 8), dtype=np.float32), types=None, scores=None, num_points=None):
         super().__init__()
 
         r'''

@@ -26,13 +26,6 @@ class WaymoDet3dDataset(MDet3dDataset):
         super().__init__(info_path, transforms, codec, filter)
         self.load_opt = load_opt
 
-        self.labels_name = []
-        self.type2label = {}
-        for label_id, (name, type_list) in enumerate(load_opt['labels']):
-            self.labels_name.append(name)
-            for type in type_list:
-                self.type2label[type] = label_id
-
         self.pcd_loader = WaymoNSweepLoader(
             load_opt['load_dim'], load_opt['nsweep'])
 
@@ -47,8 +40,7 @@ class WaymoDet3dDataset(MDet3dDataset):
         sample['meta'] = dict(seq_name=seq_name,
                               frame_id=frame_id,
                               stamp=stamp,
-                              labels_name=self.labels_name,
-                              type2label=self.type2label)
+                              name=sample_name)
 
     def load_data(self, sample, info):
         # load pcd
@@ -180,6 +172,12 @@ class WaymoDet3dDataset(MDet3dDataset):
             det_types = anno.types
             det_scores = anno.scores
             det_num_points = anno.num_points
+
+            # in case of we have type re mapping
+            if 'type_new_to_raw' in meta:
+                type_new_to_raw = meta['type_new_to_raw']
+                det_types = [type_new_to_raw[type] for type in det_types]
+
             for i in range(len(det_boxes)):
                 o = metrics_pb2.Object()
 

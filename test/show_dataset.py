@@ -21,10 +21,11 @@ margin = 5.0
 db_sampler = dict(
     type='GroundTruthSampler',
     info_path='/data/tmp/waymo/training_info_gt.pkl',
-    sample_groups=[('Vehicle', 15), ('Pedestrian', 10), ('Cyclist', 10)],
+    sample_groups=[('Vehicle', 10), ('Pedestrian', 10), ('Cyclist', 10)],
     labels=labels,
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
-    filters=[dict(type='FilterByNumpoints', min_num_points=5)],
+    filters=[dict(type='FilterByNumpoints', min_points_groups={
+                  'Vehicle': 100, 'Cyclist': 70, 'Pedestrian': 50})],
 )
 
 dataset = dict(
@@ -33,7 +34,8 @@ dataset = dict(
     load_opt=dict(load_dim=5, nsweep=1, labels=labels,),
     transforms=[
         #  dict(type='PcdIntensityNormlizer'),
-        #  dict(type='PcdObjectSampler', db_sampler=db_sampler),
+        dict(type='PcdObjectSampler',
+             db_sampler=db_sampler, remove_type_list=[1]),
         #  dict(type='PcdLocalTransform',
         #       rot_range=[-0.17, 0.17], translation_std=[0.5, 0.5, 0], num_try=50),
         #  dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
@@ -59,10 +61,9 @@ codec = dict(
         grid_reso=out_grid_reso,
         labels=labels,
         heatmap_encoder=dict(
-            type='NaiveGaussianBoxHeatmapEncoder',
+            type='GaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
             min_radius=2,
-            min_overlap=0.1,
         ),
     ),
     decode_cfg=dict(
@@ -92,11 +93,7 @@ codec = FI.create(codec)
 dataset.codec = codec
 
 for i in range(len(dataset)):
-    #  dataset.plot(dataset[i])
-    points = dataset[i]['data']['pcd'].points
-    hist, bins = np.histogram(points[:, 3], bins=10, range=(0, 10))
-    print(hist)
-    print(bins)
+    dataset.plot(dataset[i])
 
 dataloader = DataLoader(dataset, batch_size=2,
                         num_workers=0, collate_fn=codec.get_collater())
