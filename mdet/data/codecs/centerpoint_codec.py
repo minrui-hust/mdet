@@ -524,7 +524,7 @@ class CenterPointCodec(BaseCodec):
         return decoded_box
 
     def get_export_info(self, batch):
-        input = (batch['input']['pcd'][0], )
+        input = (batch['input']['points'][0], )
         input_name = ['points']
         output_name = ['boxes', 'score', 'label', 'valid']
         dynamic_axes = {'points': {0: 'point_num'}}
