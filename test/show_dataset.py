@@ -2,12 +2,41 @@ from mdet.utils.factory import FI
 import mdet.data
 import numpy as np
 
+from enum import IntEnum
+
 import open3d as o3d
 from tqdm import tqdm
 
 from torch.utils.data.dataloader import DataLoader
 
-labels = [('Pedestrian', [2]), ('Cyclist', [4]), ('Vehicle', [1])]
+
+class RawType(IntEnum):
+    Vehicle = 1
+    Cyclist = 4
+    Pedestrian = 2
+
+
+class NewType(IntEnum):
+    Vehicle0 = 0
+    Vehicle1 = 1
+    Vehicle2 = 2
+    Vehicle3 = 3
+    Cyclist = 4
+    Pedestrian = 5
+
+
+class Label(IntEnum):
+    Vehicle = 0
+    Cyclist = 1
+    Pedestrian = 2
+
+
+labels = {
+    Label.Vehicle: [NewType.Vehicle0, NewType.Vehicle1, NewType.Vehicle2, NewType.Vehicle3],
+    Label.Cyclist: [NewType.Cyclist],
+    Label.Pedestrian: [NewType.Pedestrian],
+}
+
 
 point_range = [-64, -64, -5, 64, 64, 5]
 voxel_size = [0.32, 0.32, 10]
@@ -16,37 +45,80 @@ voxel_reso = [400, 400, 1]
 out_grid_size = [0.64, 0.64]
 out_grid_reso = [200, 200]
 
-margin = 5.0
+margin = 2.0
+
+retype = dict(
+    type='WaymoCarRetyper',
+    raw_car_type=RawType.Vehicle,
+    new_car_types={
+        NewType.Vehicle0: (0, 3.5),
+        NewType.Vehicle1: (3.5, 8),
+        NewType.Vehicle2: (8, 15),
+        NewType.Vehicle3: (15, 30),
+    },
+    other_types={
+        RawType.Cyclist: NewType.Cyclist,
+        RawType.Pedestrian: NewType.Pedestrian
+    },
+)
 
 db_sampler = dict(
-    type='GroundTruthSampler',
+    type='GroundTruthSamplerV2',
     info_path='/data/tmp/waymo/training_info_gt.pkl',
-    sample_groups=[('Vehicle', 10), ('Pedestrian', 10), ('Cyclist', 10)],
-    labels=labels,
+    #  info_path='/data/waymo/det3d/training_info_gt.pkl',
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
-    filters=[dict(type='FilterByNumpoints', min_points_groups={
-                  'Vehicle': 100, 'Cyclist': 70, 'Pedestrian': 50})],
+    interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
+    retype=retype,
+    filters=[dict(
+        type='FilterByNumpointsV2',
+        min_points_groups={
+            NewType.Vehicle0: 100,
+            NewType.Vehicle1: 100,
+            NewType.Vehicle2: 100,
+            NewType.Vehicle3: 100,
+            NewType.Cyclist: 70,
+            NewType.Pedestrian: 50,
+        }
+    ), ],
 )
 
 dataset = dict(
     type='WaymoDet3dDataset',
     info_path='/data/tmp/waymo/training_info.pkl',
-    load_opt=dict(load_dim=5, nsweep=1, labels=labels,),
+    #  info_path='/data/waymo/det3d/training_info.pkl',
+    load_opt=dict(load_dim=5, nsweep=1, interest_types=[
+                  RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian]),
     transforms=[
-        #  dict(type='PcdIntensityNormlizer'),
-        dict(type='PcdObjectSampler',
-             db_sampler=db_sampler, remove_type_list=[1]),
+        dict(type='AnnoRetyper', retype=retype),
+        dict(type='PointNumFilterV2', groups={
+            NewType.Vehicle0: 100,
+            NewType.Vehicle1: 100,
+            NewType.Vehicle2: 100,
+            NewType.Vehicle3: 100,
+            NewType.Cyclist: 70,
+            NewType.Pedestrian: 50,
+        }),
+        dict(type='PcdObjectSamplerV2',
+             db_sampler=db_sampler, sample_groups={
+                 NewType.Vehicle0: 3,
+                 NewType.Vehicle1: 10,
+                 NewType.Vehicle2: 5,
+                 NewType.Vehicle3: 5,
+                 NewType.Cyclist: 8,
+                 NewType.Pedestrian: 8,
+             }),
         #  dict(type='PcdLocalTransform',
         #       rot_range=[-0.17, 0.17], translation_std=[0.5, 0.5, 0], num_try=50),
-        #  dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
-        #  dict(type='PcdGlobalTransform',
-        #       rot_range=[-0.78539816, 0.78539816],
-        #       scale_range=[0.95, 1.05],
-        #       translation_std=[0.5, 0.5, 0]),
+        dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
+        dict(type='PcdGlobalTransform',
+             rot_range=[-0.78539816, 0.78539816],
+             scale_range=[0.95, 1.05],
+             translation_std=[0.5, 0.5, 0]),
         dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-        #  dict(type='PcdShuffler'),
+        dict(type='PcdIntensityNormlizer'),
+        dict(type='PcdShuffler'),
     ],
-    #  filter=dict(type='IntervalDownsampler', interval=5),
+    #  filter=dict(type='IntervalDownsampler', interval=20),
 )
 
 

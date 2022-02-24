@@ -204,30 +204,36 @@ class GroundTruthSamplerV2(object):
         filter: filter config to downsample database
     """
 
-    def __init__(self, info_path, pcd_loader, retype=None, filters=[]):
+    def __init__(self, info_path, pcd_loader, interest_types=[], retype=None, filters=[]):
         super().__init__()
         self.info_path = info_path
         self.pcd_loader = FI.create(pcd_loader)
-        self.retype=FI.create(retype)
+        self.interest_types = interest_types
+        self.retype = FI.create(retype)
         self.filters = [FI.create(cfg) for cfg in filters]
 
         print('Initializing GroundTruthSampler...')
 
         # load infos
         db_infos = io.load(info_path)
+        db_infos = {type: info_list for type,
+                    info_list in db_infos.items() if type in self.interest_types}
 
+        # if retype is needed
         if self.retype:
             db_infos = self.retype.retype_db_info(db_infos)
 
         # filter
+        filtered_db_infos = {}
         for type in db_infos.keys():
             info_list = db_infos[type]
             for filter in self.filters:
                 info_list = filter(info_list, type)
-            db_infos[type] = info_list
+            filtered_db_infos[type] = info_list
 
         # sampler of different types
-        self.sampler_dict = {type: BatchSampler(type, info_list, shuffle=True) for type, info_list in db_infos.items()}
+        self.sampler_dict = {type: BatchSampler(
+            type, info_list, shuffle=True) for type, info_list in filtered_db_infos.items()}
         print('GroundTruthSampler Initialized !')
 
     def sample(self, typed_sample_num):
@@ -237,11 +243,15 @@ class GroundTruthSamplerV2(object):
         points_list = []
         for type, num in typed_sample_num.items():
             type_anno, type_points_list = self.sample_one_type(type, num)
-            anno +=type_anno
+            anno += type_anno
             points_list.extend(type_points_list)
 
-        return anno, points_list
+        # shuffle objects randomly
+        permutation = np.random.permutation(len(points_list))
+        anno = anno[permutation]
+        points_list = [points_list[i] for i in permutation]
 
+        return anno, points_list
 
     def sample_one_type(self, type, num):
         r"""Sampling specific categories of bounding boxes.
@@ -255,10 +265,10 @@ class GroundTruthSamplerV2(object):
         sampled_types = np.full(len(samples), type, dtype=np.int32)
         sampled_num_points = np.array([info['num_points'] for info in samples])
 
-        sampled_points_list = [self.pcd_loader(info['sweeps']).points for info in samples]
+        sampled_points_list = [self.pcd_loader(
+            info['sweeps']).points for info in samples]
 
         return Annotation3d(boxes=sampled_boxes, types=sampled_types, num_points=sampled_num_points), sampled_points_list
-
 
 
 @FI.register
@@ -270,7 +280,7 @@ class FilterByDifficulty(object):
         super().__init__()
         self.difficulties_to_remove = difficulties_to_remove
 
-    def __call__(self, info_list, type, label_name):
+    def __call__(self, info_list, type, label_name=None):
         return [info for info in info_list if info['difficulty'] not in self.difficulties_to_remove]
 
 
@@ -284,9 +294,27 @@ class FilterByNumpoints(object):
         super().__init__()
         self.min_points_groups = min_points_groups
 
-    def __call__(self, info_list, type, label_name):
+    def __call__(self, info_list, type, label_name=None):
         if isinstance(self.min_points_groups, dict):
             min_points = self.min_points_groups[label_name]
+        else:
+            min_points = self.min_points_groups
+        return [info for info in info_list if info['num_points'] > min_points]
+
+
+@FI.register
+class FilterByNumpointsV2(object):
+    r'''
+    filter ground truths by num points
+    '''
+
+    def __init__(self, min_points_groups):
+        super().__init__()
+        self.min_points_groups = min_points_groups
+
+    def __call__(self, info_list, type):
+        if isinstance(self.min_points_groups, dict):
+            min_points = self.min_points_groups[type]
         else:
             min_points = self.min_points_groups
         return [info for info in info_list if info['num_points'] > min_points]
@@ -305,7 +333,7 @@ class FilterByRange(object):
         self.x_max = range[3]
         self.y_max = range[4]
 
-    def __call__(self, info_list, type, label_name):
+    def __call__(self, info_list, type, label_name=None):
         return [info for info in info_list if self.in_range(info)]
 
     def in_range(self, info):

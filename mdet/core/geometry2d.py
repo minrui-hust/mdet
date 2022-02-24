@@ -70,6 +70,9 @@ def boxes_corners(boxes):
 
 
 def box_collision_test(kboxes, qboxes):
+    r'''
+    2D box collision test, boxes should be 2d(dim is 6)
+    '''
     kboxes_corners = boxes_corners(kboxes)
     qboxes_corners = boxes_corners(qboxes)
     return box_collision_test_jit(kboxes_corners, qboxes_corners)

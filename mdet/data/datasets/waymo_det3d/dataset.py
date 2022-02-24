@@ -29,6 +29,8 @@ class WaymoDet3dDataset(MDet3dDataset):
         self.pcd_loader = WaymoNSweepLoader(
             load_opt['load_dim'], load_opt['nsweep'])
 
+        self.load_types = load_opt['interest_types']
+
     def load_meta(self, sample, info):
         anno = io.load(info['anno_path'])
         frame_id = anno['frame_id']
@@ -57,7 +59,7 @@ class WaymoDet3dDataset(MDet3dDataset):
         num_points = np.empty((0, ), dtype=np.int32)
         box_list, type_list, num_points_list = [], [], []
         for object in anno['objects']:
-            if object['type'] in self.type2label:
+            if object['type'] in self.load_types:
                 box_list.append(self._normlize_box(object['box']))
                 type_list.append(object['type'])
                 num_points_list.append(object['num_points'])
