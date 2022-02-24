@@ -10,13 +10,13 @@ from tqdm import tqdm
 from torch.utils.data.dataloader import DataLoader
 
 
-class RawType(IntEnum):
+class RawType:
     Vehicle = 1
     Cyclist = 4
     Pedestrian = 2
 
 
-class NewType(IntEnum):
+class NewType:
     Vehicle0 = 0
     Vehicle1 = 1
     Vehicle2 = 2
@@ -25,7 +25,7 @@ class NewType(IntEnum):
     Pedestrian = 5
 
 
-class Label(IntEnum):
+class Label:
     Vehicle = 0
     Cyclist = 1
     Pedestrian = 2
@@ -69,17 +69,19 @@ db_sampler = dict(
     pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
     interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
     retype=retype,
-    filters=[dict(
-        type='FilterByNumpointsV2',
-        min_points_groups={
-            NewType.Vehicle0: 100,
-            NewType.Vehicle1: 100,
-            NewType.Vehicle2: 100,
-            NewType.Vehicle3: 100,
-            NewType.Cyclist: 70,
-            NewType.Pedestrian: 50,
-        }
-    ), ],
+    filters=[
+        dict(
+            type='FilterByNumpointsV2',
+            min_points_groups={
+                NewType.Vehicle0: 100,
+                NewType.Vehicle1: 100,
+                NewType.Vehicle2: 100,
+                NewType.Vehicle3: 100,
+                NewType.Cyclist: 70,
+                NewType.Pedestrian: 50,
+            }
+        ),
+    ],
 )
 
 dataset = dict(
