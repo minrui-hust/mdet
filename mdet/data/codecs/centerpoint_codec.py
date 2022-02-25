@@ -37,14 +37,10 @@ class CenterPointCodec(BaseCodec):
 
         self.heatmap_encoder = FI.create(self.encode_cfg['heatmap_encoder'])
 
-        # many raw type may map to same label
+        # many type may map to same label
         self.type_to_label = {}
         self.label_to_type = {}
-        self.label_to_name = {}
-        self.name_to_label = {}
-        for label, (name, type_list) in enumerate(encode_cfg['labels']):
-            self.label_to_name[label] = name
-            self.name_to_label[name] = label
+        for label, type_list in encode_cfg['labels'].items():
             for type in type_list:
                 self.type_to_label[type] = label
                 # this may loss information, only record last type
@@ -72,7 +68,7 @@ class CenterPointCodec(BaseCodec):
     def encode_anno(self, sample, info):
         boxes = sample['anno'].boxes
         types = sample['anno'].types
-        label_num = len(self.label_to_name)
+        label_num = len(self.label_to_type)
         labels = np.array([self.type_to_label[type]
                           for type in types], dtype=np.int32)
 

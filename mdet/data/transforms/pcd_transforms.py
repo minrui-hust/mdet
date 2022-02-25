@@ -1,16 +1,20 @@
+import time
+
 import numpy as np
 
-from mdet.core.geometry3d import remove_points_in_boxes, points_in_boxes, remove_points_in_boxes
-
-
+from mdet.core.geometry2d import box_collision_test
+from mdet.core.geometry3d import (
+    points_in_boxes,
+    remove_points_in_boxes,
+    remove_points_in_boxes,
+)
+from mdet.core.pointcloud import Pointcloud
 from mdet.data.transforms.transform_utils import (
     noise_per_box,
     transform_boxes,
     transform_points,
 )
 from mdet.utils.factory import FI
-
-import time
 
 
 @FI.register
@@ -82,6 +86,46 @@ class PointNumFilter(object):
                 boxes_mask.append(i)
 
         sample['anno'] = sample['anno'][boxes_mask]
+
+
+@FI.register
+class PointNumFilterV2(object):
+    r'''
+    Filter out the box with too less points
+    '''
+
+    def __init__(self, groups={}):
+        super().__init__()
+        self.groups = groups
+
+    def __call__(self, sample, info):
+        num_points = sample['anno'].num_points
+        types = sample['anno'].types
+
+        boxes_mask = []
+        for i in range(len(types)):
+            point_num = num_points[i]
+            type = types[i]
+            if point_num >= self.groups[type]:
+                boxes_mask.append(i)
+
+        sample['anno'] = sample['anno'][boxes_mask]
+
+
+@FI.register
+class AnnoRetyper(object):
+    r'''
+    assign new type id
+    '''
+
+    def __init__(self, retype=None):
+        super().__init__()
+        self.retype = FI.create(retype)
+
+    def __call__(self, sample, info):
+        if self.retype:
+            sample['anno'] = self.retype.retype_anno(sample['anno'])
+            sample['meta']['type_new_to_raw'] = self.retype.get_type_map()
 
 
 @FI.register
@@ -241,6 +285,56 @@ class PcdObjectSampler(object):
 
         # add points in sampled boxes
         sample['data']['pcd'] += sampled['sample_pcd']
+
+
+@FI.register
+class PcdObjectSamplerV2(object):
+    def __init__(self, db_sampler, sample_groups):
+        self.sampler = FI.create(db_sampler)
+        self.sample_groups = sample_groups
+
+    def __call__(self, sample, info):
+        anno = sample['anno']
+
+        gt_boxes = anno.boxes
+        gt_types = anno.types
+        gt_points = sample['data']['pcd'].points
+
+        typed_sample_num = {}
+        for type, max_num in self.sample_groups.items():
+            type_indice = (gt_types == type).nonzero()
+            typed_sample_num[type] = max(0, max_num - len(type_indice))
+
+        # do sample according to typed_sample_num
+        sampled_anno, sampled_points_list = self.sampler.sample(
+            typed_sample_num)
+
+        # do nms, keep valid samples
+        sampled_boxes = sampled_anno.boxes
+        total_boxes = np.concatenate([gt_boxes, sampled_boxes], axis=0)
+        total_boxes = total_boxes[:, [0, 1, 3, 4, 6, 7]]
+        collision_matrix = box_collision_test(total_boxes, total_boxes)
+        valid_sample_id_list = []
+        for id in range(len(gt_boxes), len(total_boxes)):
+            # this box should be supressed
+            if collision_matrix[:id, id].any():
+                # clear id-th row and col, indicate this boxes ommited
+                collision_matrix[id, :] = 0
+                collision_matrix[:, id] = 0
+            else:  # this box should be selected
+                valid_sample_id_list.append(id-len(gt_boxes))
+
+        sampled_anno = sampled_anno[valid_sample_id_list]
+        sampled_points = np.concatenate(
+            [sampled_points_list[id] for id in valid_sample_id_list], axis=0)
+
+        # merge
+        # remove points in sampled boxes first
+        sample['data']['pcd'].points = remove_points_in_boxes(
+            gt_points, sampled_anno.boxes)
+
+        sample['data']['pcd'] += Pointcloud(points=sampled_points)
+        sample['anno'] += sampled_anno
 
 
 @FI.register
