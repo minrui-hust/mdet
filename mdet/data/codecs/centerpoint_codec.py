@@ -157,10 +157,8 @@ class CenterPointCodec(BaseCodec):
 
         if self.iou_rectification:
             # get predicted iou
-            iou = output['iou'].permute(0, 2, 3, 1).view(B, H*W, -1)
-            topk_iou = iou.gather(
-                1, topk_indices.unsqueeze(-1).expand(-1, -1, iou.shape[2]))
-            topk_iou = topk_iou.gather(1, topk_label)
+            iou = output['iou'].view(B, H*W)
+            topk_iou = iou.gather(1, topk_indices)
             topk_iou = (topk_iou + 1) * 0.5  # range [-1,1] to [0,1]
 
             # rectify score
