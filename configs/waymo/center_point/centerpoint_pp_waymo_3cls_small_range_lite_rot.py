@@ -8,8 +8,27 @@ max_epochs = GCFG['max_epochs'] or 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
+
 # global config
-labels = [('Vehicle', [1]), ('Cyclist', [4]), ('Pedestrian', [2])]
+class RawType:
+    Vehicle = 1
+    Cyclist = 4
+    Pedestrian = 2
+
+
+class Label:
+    Vehicle = 0
+    Cyclist = 1
+    Pedestrian = 2
+
+
+labels = {
+    Label.Vehicle: [RawType.Vehicle],
+    Label.Cyclist: [RawType.Cyclist],
+    Label.Pedestrian: [RawType.Pedestrian],
+}
+
+point_dim = 4
 
 point_range = [-59.52, -59.52, -2, 59.52, 59.52, 4.0]
 voxel_size = [0.32, 0.32, 6.0]
@@ -17,8 +36,6 @@ voxel_reso = [372, 372, 1]
 
 out_grid_size = [0.32, 0.32]
 out_grid_reso = [372, 372]
-
-point_dim = 4
 
 margin = 5.0
 
@@ -136,17 +153,23 @@ codec_infer['decode_cfg'] = dict(
 
 # data config
 db_sampler = dict(
-    type='GroundTruthSampler',
+    type='GroundTruthSamplerV2',
     info_path=f'{dataset_root}/training_info_gt.pkl',
-    sample_groups=[('Vehicle', 15), ('Pedestrian', 10), ('Cyclist', 10)],
-    labels=labels,
     pcd_loader=dict(type='WaymoObjectNSweepLoader',
                     load_dim=point_dim, nsweep=1),
+    interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
     filters=[
-        dict(type='FilterByNumpoints',
-             min_points_groups={'Vehicle': 100, 'Cyclist': 70, 'Pedestrian': 50}),
+        dict(
+            type='FilterByNumpointsV2',
+            min_points_groups={
+                RawType.Vehicle: 100,
+                RawType.Cyclist: 70,
+                RawType.Pedestrian: 50,
+            }
+        ),
         dict(type='FilterByRange', range=point_range),
     ],
+
 )
 
 dataloader_train = dict(
@@ -157,11 +180,19 @@ dataloader_train = dict(
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path=f'{dataset_root}/training_info.pkl',
-        load_opt=dict(load_dim=point_dim, nsweep=1, labels=labels,),
+        load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
+                      RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],),
         transforms=[
-            dict(type='PointNumFilter',
-                 groups={'Vehicle': 100, 'Cyclist': 70, 'Pedestrian': 50}),
-            dict(type='PcdObjectSampler', db_sampler=db_sampler),
+            dict(type='PointNumFilterV2', groups={
+                RawType.Vehicle: 100,
+                RawType.Cyclist: 70,
+                RawType.Pedestrian: 50,
+            }),
+            dict(type='PcdObjectSamplerV2', db_sampler=db_sampler, sample_groups={
+                RawType.Vehicle: 15,
+                RawType.Cyclist: 10,
+                RawType.Pedestrian: 10,
+            }),
             dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
             dict(type='PcdGlobalTransform',
                  rot_range=[-0.78539816, 0.78539816],
@@ -179,8 +210,11 @@ dataloader_eval = _deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
-    dict(type='PointNumFilter',
-         groups={'Vehicle': 100, 'Cyclist': 70, 'Pedestrian': 50}),
+    dict(type='PointNumFilterV2', groups={
+        RawType.Vehicle: 100,
+        RawType.Cyclist: 70,
+        RawType.Pedestrian: 50,
+    }),
     dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
     dict(type='PcdIntensityNormlizer', scale=2.0),
     dict(type='PcdShuffler'),
