@@ -335,9 +335,13 @@ class CenterPointCodec(BaseCodec):
                     positive_pred_boxes = self.decode_box(
                         pred_encoded_boxes.unsqueeze(0), positive_index[:, 1:].unsqueeze(0)).squeeze(0)
 
-                    positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
-                                              positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
-                    print(positive_gt_iou)
+                    positive_pred_boxes_bev = positive_pred_boxes[:, [
+                        0, 1, 3, 4, 6, 7]]
+                    positive_gt_boxes_bev = positive_gt_boxes[:, [
+                        0, 1, 3, 4, 6, 7]]
+                    positive_gt_iou = iou_bev(
+                        positive_pred_boxes_bev, positive_gt_boxes_bev)
+
                     # encode iou to range [-1, 1]
                     positive_gt = 2 * (positive_gt_iou.unsqueeze(-1) - 0.5)
                 else:

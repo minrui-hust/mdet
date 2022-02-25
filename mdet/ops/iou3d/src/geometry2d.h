@@ -213,7 +213,7 @@ struct __attribute__((packed)) Box{
   }
 
   __device__ float area() const {
-    return 2 *extend.x * extend.y;
+    return 4 *extend.x * extend.y;
   }
 
   static constexpr int Dim = 6;
