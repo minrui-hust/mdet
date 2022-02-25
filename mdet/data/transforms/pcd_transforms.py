@@ -106,7 +106,11 @@ class PointNumFilterV2(object):
         for i in range(len(types)):
             point_num = num_points[i]
             type = types[i]
-            if point_num >= self.groups[type]:
+            if isinstance(self.groups, dict):
+                min_num = self.groups[type]
+            else:
+                min_num = self.groups
+            if point_num >= min_num:
                 boxes_mask.append(i)
 
         sample['anno'] = sample['anno'][boxes_mask]

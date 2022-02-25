@@ -337,6 +337,7 @@ class CenterPointCodec(BaseCodec):
 
                     positive_gt_iou = iou_bev(positive_pred_boxes[:, [0, 1, 3, 4, 6, 7]],
                                               positive_gt_boxes[:, [0, 1, 3, 4, 6, 7]])
+                    print(positive_gt_iou)
                     # encode iou to range [-1, 1]
                     positive_gt = 2 * (positive_gt_iou.unsqueeze(-1) - 0.5)
                 else:

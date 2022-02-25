@@ -169,7 +169,6 @@ db_sampler = dict(
         ),
         dict(type='FilterByRange', range=point_range),
     ],
-
 )
 
 dataloader_train = dict(
