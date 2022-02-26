@@ -123,7 +123,7 @@ codec_train = dict(
         valid_thresh=0.1,
     ),
     loss_cfg=dict(
-        free_heading_label=2,
+        free_heading_label=Label.Pedestrian,
         normlize_rot=True,
         head_weight={
             'heatmap': 1.0,

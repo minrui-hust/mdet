@@ -1,6 +1,5 @@
 from copy import deepcopy as _deepcopy
 from mdet.utils.global_config import GCFG
-from enum import IntEnum
 
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
@@ -17,53 +16,30 @@ class RawType:
     Pedestrian = 2
 
 
-class NewType:
-    Vehicle0 = 0
-    Vehicle1 = 1
-    Vehicle2 = 2
-    Vehicle3 = 3
-    Cyclist = 4
-    Pedestrian = 5
-
-
 class Label:
     Vehicle = 0
     Cyclist = 1
     Pedestrian = 2
 
 
-retype = dict(
-    type='WaymoCarRetyper',
-    raw_car_type=RawType.Vehicle,
-    new_car_types={
-        NewType.Vehicle0: (0, 3.5),
-        NewType.Vehicle1: (3.5, 8),
-        NewType.Vehicle2: (8, 15),
-        NewType.Vehicle3: (15, 30),
-    },
-    other_types={
-        RawType.Cyclist: NewType.Cyclist,
-        RawType.Pedestrian: NewType.Pedestrian
-    },
-)
-
-
 labels = {
-    Label.Vehicle: [NewType.Vehicle0, NewType.Vehicle1, NewType.Vehicle2, NewType.Vehicle3],
-    Label.Cyclist: [NewType.Cyclist],
-    Label.Pedestrian: [NewType.Pedestrian],
+    Label.Vehicle: [RawType.Vehicle],
+    Label.Cyclist: [RawType.Cyclist],
+    Label.Pedestrian: [RawType.Pedestrian],
 }
 
-point_dim = 4
 
-point_range = [-59.52, -59.52, -2, 59.52, 59.52, 4.0]
-voxel_size = [0.32, 0.32, 6.0]
-voxel_reso = [372, 372, 1]
+point_dim = 5
 
-out_grid_size = [0.32, 0.32]
-out_grid_reso = [372, 372]
+point_range = [-75.2, -75.2, -2, 75.2, 75.2, 4.0]
+voxel_size = [0.1, 0.1, 0.15]
+voxel_reso = [1504, 1504, 40]
 
-margin = 2.0
+# 8x times downsample
+out_grid_size = [0.8, 0.8]
+out_grid_reso = [188, 188]
+
+margin = 1.0
 
 # model config
 model_train = dict(
@@ -73,39 +49,31 @@ model_train = dict(
         point_range=point_range,
         voxel_size=voxel_size,
         voxel_reso=voxel_reso,
-        max_points=32,
-        max_voxels=30000,
+        max_points=5,
+        max_voxels=150000,
+        reduce_type='mean',
     ),
     backbone3d=dict(
-        type='PillarFeatureNet',
-        pillar_feat=[
-            ('position', 3),
-            ('attribute', point_dim-3),
-            ('center_offset', 2),
-            ('mean_offset', 3),
-            #  ('distance', 1),
-        ],
-        voxel_reso=voxel_reso,
-        voxel_size=voxel_size,
-        point_range=point_range,
-        pfn_channels=[64, 64, ],
+        type='SparseResNetFHD',
+        in_channels=point_dim,
+        # out_channels=256,
     ),
     backbone2d=dict(
-        type='SECOND',
-        layer_nums=[3, 5, 5],
-        layer_strides=[1, 2, 2],
-        out_channels=[64, 128, 256],
-        in_channels=64,
+        type='SCConvNet',
+        in_channels=256,
+        layer_nums=[3, 3],
+        layer_strides=[1, 2],
+        out_channels=[128, 256],
     ),
     neck=dict(
         type='SECONDFPN',
-        in_channels=[64, 128, 256],
-        out_channels=[128, 128, 128],
-        upsample_strides=[1, 2, 4],
+        in_channels=[128, 256],
+        out_channels=[256, 256],
+        upsample_strides=[1, 2],
     ),
     head=dict(
         type='CenterHead',
-        in_channels=3 * 128,
+        in_channels=2 * 256,
         shared_conv_channels=64,
         init_bias=-2.19,
         heads={
@@ -118,9 +86,11 @@ model_train = dict(
     ),
 )
 
+# model for evaluation
 model_eval = _deepcopy(model_train)
-model_eval['voxelization']['max_voxels'] = 50000
+model_eval['voxelization']['max_voxels'] = 300000
 
+# model for inference(export)
 model_infer = _deepcopy(model_eval)
 
 
@@ -135,9 +105,10 @@ codec_train = dict(
         grid_reso=out_grid_reso,
         labels=labels,
         heatmap_encoder=dict(
-            type='GaussianBoxHeatmapEncoder',
+            type='NaiveGaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
             min_radius=2,
+            min_overlap=0.1,
         ),
     ),
     decode_cfg=dict(
@@ -149,8 +120,6 @@ codec_train = dict(
         valid_thresh=0.1,
     ),
     loss_cfg=dict(
-        free_heading_label=Label.Pedestrian,
-        normlize_rot=True,
         head_weight={
             'heatmap': 1.0,
             'offset': 2 * 2.0,
@@ -181,22 +150,10 @@ codec_infer['decode_cfg'] = dict(
 db_sampler = dict(
     type='GroundTruthSamplerV2',
     info_path=f'{dataset_root}/training_info_gt.pkl',
-    pcd_loader=dict(type='WaymoObjectNSweepLoader',
-                    load_dim=point_dim, nsweep=1),
+    pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
     interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
-    retype=retype,
     filters=[
-        dict(
-            type='FilterByNumpointsV2',
-            min_points_groups={
-                NewType.Vehicle0: 100,
-                NewType.Vehicle1: 100,
-                NewType.Vehicle2: 100,
-                NewType.Vehicle3: 100,
-                NewType.Cyclist: 70,
-                NewType.Pedestrian: 50,
-            }
-        ),
+        dict(type='FilterByNumpointsV2', min_points_groups=5),
         dict(type='FilterByRange', range=point_range),
     ],
 )
@@ -212,34 +169,22 @@ dataloader_train = dict(
         load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
                       RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],),
         transforms=[
-            dict(type='AnnoRetyper', retype=retype),
-            dict(type='PointNumFilterV2', groups={
-                NewType.Vehicle0: 100,
-                NewType.Vehicle1: 100,
-                NewType.Vehicle2: 100,
-                NewType.Vehicle3: 100,
-                NewType.Cyclist: 70,
-                NewType.Pedestrian: 50,
+            dict(type='PointNumFilterV2', groups=1),
+            dict(type='PcdObjectSamplerV2', db_sampler=db_sampler, sample_groups={
+                RawType.Vehicle: 15,
+                RawType.Cyclist: 10,
+                RawType.Pedestrian: 10,
             }),
-            dict(type='PcdObjectSamplerV2',
-                 db_sampler=db_sampler, sample_groups={
-                     NewType.Vehicle0: 3,
-                     NewType.Vehicle1: 10,
-                     NewType.Vehicle2: 5,
-                     NewType.Vehicle3: 5,
-                     NewType.Cyclist: 8,
-                     NewType.Pedestrian: 8,
-                 }),
             dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
             dict(type='PcdGlobalTransform',
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-            dict(type='PcdIntensityNormlizer', scale=2.0),
+            dict(type='PcdIntensityNormlizer'),
             dict(type='PcdShuffler'),
         ],
-        #  filter=dict(type='IntervalDownsampler', interval=5),
+        filter=dict(type='IntervalDownsampler', interval=5),
     ),
 )
 
@@ -247,17 +192,8 @@ dataloader_eval = _deepcopy(dataloader_train)
 dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
-    dict(type='AnnoRetyper', retype=retype),
-    dict(type='PointNumFilterV2', groups={
-        NewType.Vehicle0: 100,
-        NewType.Vehicle1: 100,
-        NewType.Vehicle2: 100,
-        NewType.Vehicle3: 100,
-        NewType.Cyclist: 70,
-        NewType.Pedestrian: 50,
-    }),
     dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-    dict(type='PcdIntensityNormlizer', scale=2.0),
+    dict(type='PcdIntensityNormlizer'),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None
@@ -273,8 +209,8 @@ model = dict(
 
 codec = dict(
     train=codec_train,
-    eval=codec_eval,
-    infer=codec_infer,
+    eval=codec_train,
+    infer=codec_train,
 )
 
 data = dict(
@@ -300,7 +236,6 @@ fit = dict(
     ),
     grad_clip=dict(type='norm', value=35),
 )
-
 
 runtime = dict(
     train=dict(
