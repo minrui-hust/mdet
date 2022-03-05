@@ -54,24 +54,6 @@ class PlWrapper(pl.LightningModule):
         self.eval_collater = self.eval_codec.get_collater()
         self.infer_collater = self.infer_codec.get_collater()
 
-        # config for evaluation, this is default for training, may be override by config
-        self.eval_log_loss = config['runtime']['eval'].get('log_loss', True)
-        self.eval_evaluate = config['runtime']['eval'].get('evaluate', True)
-        self.eval_interest_set = config['runtime']['eval'].get(
-            'interest_set', set())
-        self.eval_epoch_interest_set = config['runtime']['eval'].get(
-            'epoch_interest_set', set())
-        self.eval_step_hook = config['runtime']['eval'].get('step_hook', None)
-        self.eval_epoch_hook = config['runtime']['eval'].get(
-            'epoch_hook', None)
-        if self.eval_evaluate:
-            self.eval_interest_set |= {'anno', 'pred', 'meta'}
-            self.eval_epoch_interest_set |= {'anno', 'pred', 'meta'}
-        self.formatted_path = config['runtime']['eval'].get(
-            'formatted_path', None)
-        self.evaluate_min_epoch = config['runtime']['eval'].get(
-            'evaluate_min_epoch', 0)
-
         # check if we are doing tensorrt eval
         self.trt_model = None
         if 'trt_engine' in config:
@@ -155,7 +137,7 @@ class PlWrapper(pl.LightningModule):
         # format
         gt_path = None
         pred_path = self.formatted_path
-        if self.eval_evaluate and self.current_epoch >= self.evaluate_min_epoch:
+        if self.eval_evaluate:
             _, gt_path = tempfile.mkstemp(suffix='.pb2', prefix='mdet_gt_')
             if pred_path is None:
                 _, pred_path = tempfile.mkstemp(
@@ -164,7 +146,7 @@ class PlWrapper(pl.LightningModule):
             sample_list, pred_path=pred_path, gt_path=gt_path)
 
         # evaluation
-        if self.eval_evaluate and self.current_epoch >= self.evaluate_min_epoch:
+        if self.eval_evaluate:
             metric = self.eval_dataset.evaluate(pred_path, gt_path)
             self.log_dict(metric)
 
@@ -219,6 +201,27 @@ class PlWrapper(pl.LightningModule):
     def on_validation_start(self):
         if self.trt_model is None:  # in case we are in trt eval mode, track is not needed
             self.track_model(self.train_model, self.eval_model)
+
+        # flags for evaluation
+        self.evaluate_min_epoch = self.config['runtime']['eval'].get(
+            'evaluate_min_epoch', 0)
+        self.eval_log_loss = self.config['runtime']['eval'].get(
+            'log_loss', True)
+        self.eval_evaluate = self.config['runtime']['eval'].get(
+            'evaluate', True) and self.current_epoch >= self.evaluate_min_epoch
+        self.eval_interest_set = self.config['runtime']['eval'].get(
+            'interest_set', set())
+        self.eval_epoch_interest_set = self.config['runtime']['eval'].get(
+            'epoch_interest_set', set())
+        self.eval_step_hook = self.config['runtime']['eval'].get(
+            'step_hook', None)
+        self.eval_epoch_hook = self.config['runtime']['eval'].get(
+            'epoch_hook', None)
+        if self.eval_evaluate:
+            self.eval_interest_set |= {'anno', 'pred', 'meta'}
+            self.eval_epoch_interest_set |= {'anno', 'pred', 'meta'}
+        self.formatted_path = self.config['runtime']['eval'].get(
+            'formatted_path', None)
 
     @property
     def eval_model(self):
