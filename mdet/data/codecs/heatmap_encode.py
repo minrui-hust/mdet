@@ -29,10 +29,11 @@ class NaiveGaussianBoxHeatmapEncoder(object):
 
 @FI.register
 class GaussianBoxHeatmapEncoder(object):
-    def __init__(self, grid=0.2, min_radius=2, eps=1e-4):
+    def __init__(self, grid=0.2, min_radius=2, offset_enable=False, eps=1e-4):
         super().__init__()
         self.grid = grid
         self.min_radius = min_radius
+        self.offset_enable = offset_enable
         self.eps = eps
 
     def __call__(self, heatmap, box, center):
@@ -55,8 +56,55 @@ class GaussianBoxHeatmapEncoder(object):
         sigma_y = extend_y/self.grid/3
 
         # calc kernel
+        offset = 0
+        if self.offset_enable:
+            offset = center-(np.floor(center) + 0.5)
         kernel = gaussian_kernel_2D(
-            [rx, ry], [sigma_x, sigma_y], rotation, self.eps)
+            [rx, ry], [sigma_x, sigma_y], rotation, offset=offset, eps=self.eps)
 
         # draw kernel onto heatmap
-        draw_gaussian_kernel_2D(heatmap, center, kernel)
+        draw_gaussian_kernel_2D(heatmap, np.floor(center), kernel)
+
+
+@FI.register
+class GaussianBoxKeypointEncoder(object):
+    def __init__(self, grid=0.2, min_radius=1, offset_enable=False, eps=1e-4):
+        super().__init__()
+        self.grid = grid
+        self.min_radius = min_radius
+        self.offset_enable = offset_enable
+        self.eps = eps
+
+    def __call__(self, heatmap, box, keypoints):
+        # calc gaussian kernel parameters
+        rotation = box[6:8]
+
+        # effective extend only box's 1/3
+        extend_x = box[3]/2
+        extend_y = box[4]/2
+
+        extend_x = max(extend_x, (self.min_radius+0.5)*self.grid)
+        extend_y = max(extend_y, (self.min_radius+0.5)*self.grid)
+        extend = np.array([extend_x, extend_y], dtype=np.float32)
+
+        # corners
+        corners = rotate2d(corners_nd(
+            extend[np.newaxis, ...]), rotation[np.newaxis, ...]).squeeze(0)
+
+        rx, ry = np.max(corners, axis=0)
+        rx = math.floor(rx/self.grid + 0.5)
+        ry = math.floor(ry/self.grid + 0.5)
+
+        sigma_x = extend_x/self.grid/3
+        sigma_y = extend_y/self.grid/3
+
+        for keypoint in keypoints:
+            # calc kernel
+            offset = 0
+            if self.offset_enable:
+                offset = keypoint-(np.floor(keypoint) + 0.5)
+            kernel = gaussian_kernel_2D(
+                [rx, ry], [sigma_x, sigma_y], rotation, offset=offset, eps=self.eps)
+
+            # draw kernel onto heatmap
+            draw_gaussian_kernel_2D(heatmap, np.floor(keypoint), kernel)

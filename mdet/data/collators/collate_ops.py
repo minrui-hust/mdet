@@ -42,7 +42,7 @@ class CollateOperatorAppend(CollateOperator):
         return data_list
 
     def decollate(self, data_batch, name_str, batch_info):
-        assert(isinstance(data_batch, list))
+        assert isinstance(data_batch, list), f'{name_str}: {data_batch}'
         return data_batch
 
 
@@ -215,7 +215,8 @@ class CollateOperatorRecusive(CollateOperator):
         data_batch = list(data_batch)  # in case of data_batch is tuple
         for idx, batch in enumerate(data_batch):
             child_name_str = f'{name_str}.{idx}'
-            decollate_op = self.collator.get_decollate_op(batch, child_name_str)
+            decollate_op = self.collator.get_decollate_op(
+                batch, child_name_str)
             data_batch[idx] = decollate_op(
                 batch, child_name_str, batch_info, is_collate=False)
 
@@ -232,7 +233,8 @@ class CollateOperatorRecusive(CollateOperator):
         batch_size = batch_info['size']
         for key, batch in data_batch.items():
             child_name_str = f'{name_str}.{key}'
-            decollate_op = self.collator.get_decollate_op(batch, child_name_str)
+            decollate_op = self.collator.get_decollate_op(
+                batch, child_name_str)
             data_batch[key] = decollate_op(
                 batch, child_name_str, batch_info, is_collate=False)
 

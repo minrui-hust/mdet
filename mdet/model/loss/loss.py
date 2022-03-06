@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 
-def focal_loss(predict, target, positive_index, alpha=2.0, beta=4.0):
+def focal_loss(predict, target, positive_index, alpha=2.0, beta=4.0, full_positive_loss=False):
     r'''
     focal loss same as "Object as Point"
     predict, target: B x C x H x W
@@ -14,11 +14,15 @@ def focal_loss(predict, target, positive_index, alpha=2.0, beta=4.0):
     negtive_loss = -(torch.pow(predict, alpha) * torch.pow(1 -
                                                            target, beta) * torch.log(1 - predict)).sum()
 
-    positive_prediction = predict[positive_index[:, 0],
-                                  positive_index[:, 1], positive_index[:, 2], positive_index[:, 3]]
+    if full_positive_loss:
+        positive_loss = -(torch.pow(target, beta) *
+                          torch.pow(1-predict, alpha)*torch.log(predict)).sum()
+    else:
+        positive_prediction = predict[positive_index[:, 0],
+                                      positive_index[:, 1], positive_index[:, 2], positive_index[:, 3]]
 
-    positive_loss = -(torch.pow(1 - positive_prediction, alpha)
-                      * torch.log(positive_prediction)).sum()
+        positive_loss = -(torch.pow(1 - positive_prediction, alpha)
+                          * torch.log(positive_prediction)).sum()
 
     if positive_index.size(0) == 0:
         return negtive_loss

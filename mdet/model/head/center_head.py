@@ -62,7 +62,7 @@ class SepHead(BaseModule):
             fc = nn.Sequential(*fc)
 
             # special init for heatmap head
-            if head_name == 'heatmap':
+            if head_name in ['heatmap', 'keypoint_map']:
                 fc[-1].bias.data.fill_(init_bias)
             else:  # special init for conv2d of non heatmap heads
                 for m in fc.modules():

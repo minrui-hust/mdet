@@ -52,7 +52,7 @@ def draw_gaussian(heatmap, center, radius, k=1):
     return heatmap
 
 
-def gaussian_kernel_2D(shape, sigma, rot, eps=1e-6):
+def gaussian_kernel_2D(shape, sigma, rot, offset=0.0, eps=1e-6):
     r'''
     Args:
         shape: int array like with length 2, [x_radius, y_radius]
@@ -62,7 +62,7 @@ def gaussian_kernel_2D(shape, sigma, rot, eps=1e-6):
     # cordinates
     rx, ry = shape[0], shape[1]
     y, x = np.broadcast_arrays(*np.ogrid[-ry:ry+1, -rx:rx+1])
-    cord = np.stack([x, y], axis=-1)  # (2*ry+1)x(2*rx+1)x2
+    cord = np.stack([x, y], axis=-1) - offset  # (2*ry+1)x(2*rx+1)x2
 
     # the rotation matrix
     rotm = np.array([[rot[0], rot[1]], [-rot[1], rot[0]]], dtype=np.float32)

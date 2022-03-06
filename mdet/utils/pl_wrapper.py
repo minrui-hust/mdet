@@ -93,6 +93,7 @@ class PlWrapper(pl.LightningModule):
             for name, value in loss_dict.items():
                 self.log(f'eval/{name}', value,
                          batch_size=batch['_info_']['size'])
+            print(loss_dict)
 
         # construct batch interested
         batch_interest = Sample(_info_=batch['_info_'])
