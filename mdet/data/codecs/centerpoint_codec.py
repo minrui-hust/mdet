@@ -132,6 +132,13 @@ class CenterPointCodec(BaseCodec):
 
         pred_list = [Annotation3d() for _ in range(batch['_info_']['size'])]
         for label in self.label_to_type.keys():
+            # extrac decode config for this label
+            decode_cfg = self.decode_cfg[label]
+            pre_num = decode_cfg['pre_num']
+            post_num = decode_cfg['post_num']
+            overlap_thresh = decode_cfg['overlap_thresh']
+            iou_gamma = decode_cfg.get('iou_gamma', None)
+
             heatmap = torch.sigmoid(output['heatmap'][:, label, ...])
             B, H, W = heatmap.shape
             score = heatmap.view(B, H*W)
@@ -144,14 +151,8 @@ class CenterPointCodec(BaseCodec):
             ], dim=1)
             boxes = boxes.permute(0, 2, 3, 1).view(B, H*W, 8)
 
-            # check if should do iou rectification
-            iou_gamma = None
-            iou_rect_cfg = self.decode_cfg.get('iou_rectification', None)
-            if iou_rect_cfg is not None:
-                iou_gamma = iou_rect_cfg.get(label, None)
-
             topk_score, topk_indices = score.topk(
-                self.decode_cfg['nms_cfg']['pre_num'][label], sorted=not iou_gamma)
+                pre_num, sorted=not iou_gamma)
             topk_boxes = boxes.gather(
                 1, topk_indices.unsqueeze(-1).expand(-1, -1, boxes.shape[2]))  # [B, K, 8]
             topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 8]
@@ -178,8 +179,8 @@ class CenterPointCodec(BaseCodec):
                 keep_indices, valid_num = nms_bev(
                     nms_boxes[i],
                     topk_score[i],
-                    self.decode_cfg['nms_cfg']['overlap_thresh'][label],
-                    self.decode_cfg['nms_cfg']['post_num'][label],
+                    overlap_thresh,
+                    post_num,
                 )
                 keep_indices = keep_indices.long()
                 valid_indices = keep_indices[:valid_num]

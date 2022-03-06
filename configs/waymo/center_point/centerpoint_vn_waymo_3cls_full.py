@@ -111,30 +111,11 @@ codec_train = dict(
             min_radius=2,
         ),
     ),
-    decode_cfg=dict(
-        nms_cfg=dict(
-            pre_num={
-                Label.Vehicle: 2048,
-                Label.Cyclist: 2048,
-                Label.Pedestrian: 2048,
-            },
-            post_num={
-                Label.Vehicle: 256,
-                Label.Cyclist: 256,
-                Label.Pedestrian: 256,
-            },
-            overlap_thresh={
-                Label.Vehicle: 0.8,
-                Label.Cyclist: 0.55,
-                Label.Pedestrian: 0.55,
-            },
-        ),
-        iou_rectification={
-            Label.Vehicle: 2.0,
-            Label.Cyclist: 2.0,
-            Label.Pedestrian: 2.0,
-        },
-    ),
+    decode_cfg={
+        Label.Vehicle: dict(pre_num=2048, post_num=256, overlap_thresh=0.8, iou_gamma=2.0),
+        Label.Cyclist: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0),
+        Label.Pedestrian: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0),
+    },
     loss_cfg=dict(
         head_weight={
             'heatmap': 1.0,
