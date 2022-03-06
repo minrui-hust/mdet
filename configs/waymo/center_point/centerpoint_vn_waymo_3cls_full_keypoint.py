@@ -115,8 +115,8 @@ codec_train = dict(
         keypoint_encoder=dict(
             type='GaussianBoxKeypointEncoder',
             grid=out_grid_size[0],
-            min_radius=1,
-            offset_enable=True,
+            min_radius=0,
+            #  offset_enable=True,
         ),
     ),
     decode_cfg={
