@@ -4,7 +4,7 @@ from mdet.utils.global_config import GCFG
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
 num_workers = GCFG['num_workers'] or 4
-max_epochs = GCFG['max_epochs'] or 18 # 36
+max_epochs = GCFG['max_epochs'] or 18  # 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
@@ -120,9 +120,9 @@ codec_train = dict(
         ),
     ),
     decode_cfg={
-        Label.Vehicle: dict(pre_num=2048, post_num=256, overlap_thresh=0.8, iou_gamma=2.0),
-        Label.Cyclist: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0),
-        Label.Pedestrian: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0),
+        Label.Vehicle: dict(pre_num=2048, post_num=256, overlap_thresh=0.8, iou_gamma=2.0, valid_thresh=0.05),
+        Label.Cyclist: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0, valid_thresh=0.05),
+        Label.Pedestrian: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0, valid_thresh=0.05),
     },
     loss_cfg=dict(
         head_weight={

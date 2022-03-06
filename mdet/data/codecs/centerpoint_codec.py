@@ -158,6 +158,7 @@ class CenterPointCodec(BaseCodec):
             post_num = decode_cfg['post_num']
             overlap_thresh = decode_cfg['overlap_thresh']
             iou_gamma = decode_cfg.get('iou_gamma', None)
+            valid_thresh = decode_cfg.get('valid_thresh', 0.1)
 
             heatmap = torch.sigmoid(output['heatmap'][:, label, ...])
             B, H, W = heatmap.shape
@@ -208,8 +209,9 @@ class CenterPointCodec(BaseCodec):
                 det_score = topk_score[i][valid_indices].cpu().numpy()
                 det_type = np.array([self.label_to_type[label]
                                     for _ in range(len(det_box))], dtype=np.int32)
+                mask = det_score > valid_thresh
                 pred = Annotation3d(
-                    boxes=det_box, types=det_type, scores=det_score)
+                    boxes=det_box[mask], types=det_type[mask], scores=det_score[mask])
                 pred_list[i] += pred
 
         return pred_list
