@@ -120,9 +120,9 @@ codec_train = dict(
         ),
     ),
     decode_cfg={
-        Label.Vehicle: dict(pre_num=2048, post_num=256, overlap_thresh=0.8, iou_gamma=2.0, valid_thresh=0.05),
-        Label.Cyclist: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0, valid_thresh=0.05),
-        Label.Pedestrian: dict(pre_num=2048, post_num=128, overlap_thresh=0.55, iou_gamma=2.0, valid_thresh=0.05),
+        Label.Vehicle:    dict(pre_num=4096, post_num=512, overlap_thresh=0.8,  iou_gamma=2.0, valid_thresh=0.05),
+        Label.Cyclist:    dict(pre_num=4096, post_num=512, overlap_thresh=0.55, iou_gamma=2.0, valid_thresh=0.05),
+        Label.Pedestrian: dict(pre_num=4096, post_num=512, overlap_thresh=0.55, iou_gamma=2.0, valid_thresh=0.05),
     },
     loss_cfg=dict(
         head_weight={
