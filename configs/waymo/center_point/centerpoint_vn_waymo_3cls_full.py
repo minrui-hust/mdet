@@ -113,11 +113,27 @@ codec_train = dict(
     ),
     decode_cfg=dict(
         nms_cfg=dict(
-            pre_num=4096,
-            post_num=500,
-            overlap_thresh=0.7,
+            pre_num={
+                Label.Vehicle: 2048,
+                Label.Cyclist: 2048,
+                Label.Pedestrian: 2048,
+            },
+            post_num={
+                Label.Vehicle: 256,
+                Label.Cyclist: 256,
+                Label.Pedestrian: 256,
+            },
+            overlap_thresh={
+                Label.Vehicle: 0.8,
+                Label.Cyclist: 0.55,
+                Label.Pedestrian: 0.55,
+            },
         ),
-        iou_rectification=True,
+        iou_rectification={
+            Label.Vehicle: 2.0,
+            Label.Cyclist: 2.0,
+            Label.Pedestrian: 2.0,
+        },
     ),
     loss_cfg=dict(
         head_weight={
