@@ -150,6 +150,7 @@ codec_train = dict(
 )
 
 codec_eval = _deepcopy(codec_train)
+#  codec_eval['encode_cfg']['encode_anno'] = False
 
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
@@ -226,8 +227,8 @@ model = dict(
 
 codec = dict(
     train=codec_train,
-    eval=codec_train,
-    infer=codec_train,
+    eval=codec_eval,
+    infer=codec_infer,
 )
 
 data = dict(
