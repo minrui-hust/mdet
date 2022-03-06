@@ -4,7 +4,7 @@ from mdet.utils.global_config import GCFG
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
 num_workers = GCFG['num_workers'] or 4
-max_epochs = GCFG['max_epochs'] or 36
+max_epochs = GCFG['max_epochs'] or 18 # 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
@@ -188,7 +188,7 @@ dataloader_train = dict(
             dict(type='PcdGlobalTransform',
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
-                 translation_std=[0.5, 0.5, 0]),
+                 translation_std=[0.5, 0.5, 0.2]),
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
             dict(type='PcdIntensityNormlizer', scale=2.0),
             dict(type='PcdShuffler'),
