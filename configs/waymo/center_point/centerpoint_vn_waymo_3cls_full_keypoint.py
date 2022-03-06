@@ -127,7 +127,7 @@ codec_train = dict(
     loss_cfg=dict(
         head_weight={
             'heatmap': 1.0,
-            'keypoint_map': 1.0,
+            'keypoint_map': 0.25,
             'offset': 2 * 2.0,
             'height': 1 * 2.0,
             'size': 3 * 2.0,
@@ -190,7 +190,7 @@ dataloader_train = dict(
                  scale_range=[0.95, 1.05],
                  translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-            dict(type='PcdIntensityNormlizer'),
+            dict(type='PcdIntensityNormlizer', scale=2.0),
             dict(type='PcdShuffler'),
         ],
         #  filter=dict(type='IntervalDownsampler', interval=5),
@@ -202,7 +202,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-    dict(type='PcdIntensityNormlizer'),
+    dict(type='PcdIntensityNormlizer', scale=2.0),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None
@@ -249,8 +249,8 @@ fit = dict(
 runtime = dict(
     train=dict(
         logger=[
-            dict(type='TensorBoardLogger',),
-            dict(type='CSVLogger',),
+            dict(type='TensorBoardLogger', flush_secs=30),
+            dict(type='CSVLogger', flush_logs_every_n_steps=50),
         ],
     ),
     eval=dict(evaluate_min_epoch=max_epochs-1),
