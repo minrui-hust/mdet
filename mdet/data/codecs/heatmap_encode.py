@@ -29,19 +29,20 @@ class NaiveGaussianBoxHeatmapEncoder(object):
 
 @FI.register
 class GaussianBoxHeatmapEncoder(object):
-    def __init__(self, grid=0.2, min_radius=2, offset_enable=False, eps=1e-4):
+    def __init__(self, grid=0.2, min_radius=2, offset_enable=False, ratio=[1.0, 1.0], eps=1e-4):
         super().__init__()
         self.grid = grid
         self.min_radius = min_radius
         self.offset_enable = offset_enable
+        self.ratio = ratio
         self.eps = eps
 
     def __call__(self, heatmap, box, center):
         # calc gaussian kernel parameters
         rotation = box[6:8]
 
-        extend_x = max(box[3], (self.min_radius+0.5)*self.grid)
-        extend_y = max(box[4], (self.min_radius+0.5)*self.grid)
+        extend_x = max(box[3]*self.ratio[0], (self.min_radius+0.5)*self.grid)
+        extend_y = max(box[4]*self.ratio[1], (self.min_radius+0.5)*self.grid)
         extend = np.array([extend_x, extend_y], dtype=np.float32)
 
         # corners
@@ -68,11 +69,12 @@ class GaussianBoxHeatmapEncoder(object):
 
 @FI.register
 class GaussianBoxKeypointEncoder(object):
-    def __init__(self, grid=0.2, min_radius=1, offset_enable=False, eps=1e-4):
+    def __init__(self, grid=0.2, min_radius=1, offset_enable=False, ratio=[1.0, 1.0], eps=1e-4):
         super().__init__()
         self.grid = grid
         self.min_radius = min_radius
         self.offset_enable = offset_enable
+        self.ratio = ratio
         self.eps = eps
 
     def __call__(self, heatmap, box, keypoints):
@@ -80,8 +82,8 @@ class GaussianBoxKeypointEncoder(object):
         rotation = box[6:8]
 
         # effective extend only box's 1/3
-        extend_x = box[3]/2
-        extend_y = box[4]/2
+        extend_x = min(box[3]*self.ratio[0], box[4]*self.ratio[0])
+        extend_y = min(box[3]*self.ratio[1], box[4]*self.ratio[1])
 
         extend_x = max(extend_x, (self.min_radius+0.5)*self.grid)
         extend_y = max(extend_y, (self.min_radius+0.5)*self.grid)

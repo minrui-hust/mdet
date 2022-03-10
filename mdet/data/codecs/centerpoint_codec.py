@@ -38,6 +38,7 @@ class CenterPointCodec(BaseCodec):
 
         self.heatmap_encoder = FI.create(self.encode_cfg['heatmap_encoder'])
 
+        self.keypoint_labels = self.encode_cfg.get('keypoint_labels', [])
         self.keypoint_encoder = FI.create(self.encode_cfg['keypoint_encoder'])
 
         # many type may map to same label
@@ -121,16 +122,23 @@ class CenterPointCodec(BaseCodec):
 
         # keypoint
         keypoint_map = None
+        positive_keypoint_indices = None
         if self.keypoint_encoder is not None:
             keypoint_map = np.zeros(
                 (self.grid_reso[1], self.grid_reso[0]), dtype=np.float32)
             for i in range(len(boxes)):
-                corners = rotate2d(corners_nd(boxes[[i], 3:5]), boxes[[
-                                   i], 6:]).squeeze(0) + boxes[i, :2]
+                if labels[i] in self.keypoint_labels:
+                    corners = rotate2d(corners_nd(boxes[[i], 3:5]), boxes[[
+                                       i], 6:]).squeeze(0) + boxes[i, :2]
 
-                corners = (corners-self.point_range[:2])/self.grid_size[:2]
+                    corners = (corners-self.point_range[:2])/self.grid_size[:2]
 
-                self.keypoint_encoder(keypoint_map, boxes[i], corners)
+                    self.keypoint_encoder(keypoint_map, boxes[i], corners)
+
+            mask = [i for i, label in enumerate(
+                labels) if label in self.keypoint_labels]
+            positive_keypoint_indices = np.stack(
+                (cords_y[mask], cords_x[mask]), axis=-1).astype(np.int32)
 
         sample['gt'] = dict(offset=torch.from_numpy(offset),
                             height=torch.from_numpy(height),
@@ -144,6 +152,8 @@ class CenterPointCodec(BaseCodec):
                             )
         if keypoint_map is not None:
             sample['gt']['keypoint_map'] = torch.from_numpy(keypoint_map)
+            sample['gt']['positive_keypoint_indices'] = torch.from_numpy(
+                positive_keypoint_indices)
 
     def decode_eval(self, output, batch=None):
         r'''
@@ -307,14 +317,20 @@ class CenterPointCodec(BaseCodec):
     def loss(self, output, batch):
         positive_index = batch['gt']['positive_indices'].long()
         positive_heatmap_index = batch['gt']['positive_heatmap_indices'].long()
+        positive_keypoint_index = batch['gt']['positive_keypoint_indices'].long(
+        )
 
         loss_dict = {}
         for head_name in self.loss_cfg['head_weight'].keys():
             head_prediction = output[head_name]
-            if head_name in ['heatmap', 'keypoint_map']:
+            if head_name == 'heatmap':
                 heatmap_prediction = self.safe_sigmoid(head_prediction)
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
+            elif head_name == 'keypoint_map':
+                heatmap_prediction = self.safe_sigmoid(head_prediction)
+                loss = self.criteria_heatmap(
+                    heatmap_prediction, batch['gt'][head_name], positive_keypoint_index)
             else:
                 # prediction
                 positive_prediction = head_prediction[positive_index[:, 0],
@@ -420,6 +436,13 @@ class CenterPointCodec(BaseCodec):
                     pad_cfg=dict(pad=(1, 0)),
                     inc_func=lambda x: torch.tensor(
                         [1, 0, 0, 0], dtype=torch.int32),
+                ),
+                '.gt.positive_keypoint_indices': dict(
+                    type='cat',
+                    dim=0,
+                    pad_cfg=dict(pad=(1, 0)),
+                    inc_func=lambda x: torch.tensor(
+                        [1, 0, 0], dtype=torch.int32),
                 ),
 
 

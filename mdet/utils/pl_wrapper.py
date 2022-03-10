@@ -72,6 +72,7 @@ class PlWrapper(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         output = self.train_model(batch)
         loss_dict = self.train_codec.loss(output, batch)
+        print(loss_dict)
 
         # log loss
         for name, value in loss_dict.items():

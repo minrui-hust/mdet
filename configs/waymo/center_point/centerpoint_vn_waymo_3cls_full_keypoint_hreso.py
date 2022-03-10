@@ -36,8 +36,8 @@ voxel_size = [0.1, 0.1, 0.15]
 voxel_reso = [1504, 1504, 40]
 
 # 8x times downsample
-out_grid_size = [0.8, 0.8]
-out_grid_reso = [188, 188]
+out_grid_size = [0.4, 0.4]
+out_grid_reso = [376, 376]
 
 margin = 1.0
 
@@ -69,7 +69,7 @@ model_train = dict(
         type='SECONDFPN',
         in_channels=[128, 256],
         out_channels=[256, 256],
-        upsample_strides=[1, 2],
+        upsample_strides=[2, 4],
     ),
     head=dict(
         type='CenterHead',
@@ -109,15 +109,18 @@ codec_train = dict(
         heatmap_encoder=dict(
             type='GaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
-            min_radius=1.5,
+            min_radius=2.0,
+            ratio=[0.8, 1.0],
             offset_enable=True,
         ),
         keypoint_encoder=dict(
             type='GaussianBoxKeypointEncoder',
             grid=out_grid_size[0],
-            min_radius=0,
-            #  offset_enable=True,
+            min_radius=1.0,
+            ratio=[1.0, 1.0],
+            offset_enable=True,
         ),
+        keypoint_labels=[Label.Vehicle],
     ),
     decode_cfg={
         Label.Vehicle:    dict(pre_num=4096, post_num=512, overlap_thresh=0.8,  iou_gamma=2.0, valid_thresh=0.05),
