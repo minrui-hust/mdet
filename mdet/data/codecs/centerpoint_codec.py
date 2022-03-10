@@ -39,7 +39,7 @@ class CenterPointCodec(BaseCodec):
         self.heatmap_encoder = FI.create(self.encode_cfg['heatmap_encoder'])
 
         self.keypoint_labels = self.encode_cfg.get('keypoint_labels', [])
-        self.keypoint_encoder = FI.create(self.encode_cfg['keypoint_encoder'])
+        self.keypoint_encoder = FI.create(self.encode_cfg.get('keypoint_encoder', None))
 
         # many type may map to same label
         self.type_to_label = {}
@@ -317,8 +317,6 @@ class CenterPointCodec(BaseCodec):
     def loss(self, output, batch):
         positive_index = batch['gt']['positive_indices'].long()
         positive_heatmap_index = batch['gt']['positive_heatmap_indices'].long()
-        positive_keypoint_index = batch['gt']['positive_keypoint_indices'].long(
-        )
 
         loss_dict = {}
         for head_name in self.loss_cfg['head_weight'].keys():
@@ -328,6 +326,7 @@ class CenterPointCodec(BaseCodec):
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             elif head_name == 'keypoint_map':
+                positive_keypoint_index = batch['gt']['positive_keypoint_indices'].long()
                 heatmap_prediction = self.safe_sigmoid(head_prediction)
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_keypoint_index)
