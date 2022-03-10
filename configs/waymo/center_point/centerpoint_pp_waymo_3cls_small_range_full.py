@@ -154,7 +154,7 @@ codec_infer['decode_cfg'] = dict(
 db_sampler = dict(
     type='GroundTruthSamplerV2',
     info_path=f'{dataset_root}/training_info_gt.pkl',
-    pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=5, nsweep=1),
+    pcd_loader=dict(type='WaymoObjectNSweepLoader', load_dim=point_dim, nsweep=1),
     interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
     filters=[
         dict(type='FilterByNumpoints', min_points_groups=5),
