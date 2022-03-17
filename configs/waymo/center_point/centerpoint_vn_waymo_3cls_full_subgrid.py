@@ -4,7 +4,7 @@ from mdet.utils.global_config import GCFG
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
 num_workers = GCFG['num_workers'] or 4
-max_epochs = GCFG['max_epochs'] or 18  # 36
+max_epochs = GCFG['max_epochs'] or 36
 lr_scale = GCFG['lr_scale'] or 1.0  # may rescale by gpu number
 dataset_root = GCFG['dataset_root'] or '/data/waymo'
 
@@ -36,8 +36,8 @@ voxel_size = [0.1, 0.1, 0.15]
 voxel_reso = [1504, 1504, 40]
 
 # 8x times downsample
-out_grid_size = [0.4, 0.4]
-out_grid_reso = [376, 376]
+out_grid_size = [0.8, 0.8]
+out_grid_reso = [188, 188]
 
 margin = 1.0
 
@@ -54,7 +54,7 @@ model_train = dict(
         reduce_type='mean',
     ),
     backbone3d=dict(
-        type='SparseResNetUHD',
+        type='SparseResNetFHD',
         in_channels=point_dim,
         # out_channels=256,
     ),
@@ -78,7 +78,6 @@ model_train = dict(
         init_bias=-2.19,
         heads={
             'heatmap': (len(labels), 2),
-            'keypoint_map': (1, 2),
             'offset': (2, 2),
             'height': (1, 2),
             'size': (3, 2),
@@ -110,17 +109,8 @@ codec_train = dict(
             type='GaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
             min_radius=2.0,
-            ratio=[0.8, 1.0],
             offset_enable=True,
         ),
-        keypoint_encoder=dict(
-            type='GaussianBoxKeypointEncoder',
-            grid=out_grid_size[0],
-            min_radius=1.0,
-            ratio=[1.0, 1.0],
-            offset_enable=True,
-        ),
-        keypoint_labels=[Label.Vehicle],
     ),
     decode_cfg={
         Label.Vehicle:    dict(pre_num=4096, post_num=512, overlap_thresh=0.8,  iou_gamma=2.0, valid_thresh=0.05),
@@ -130,7 +120,6 @@ codec_train = dict(
     loss_cfg=dict(
         head_weight={
             'heatmap': 1.0,
-            'keypoint_map': 0.25,
             'offset': 2 * 2.0,
             'height': 1 * 2.0,
             'size': 3 * 2.0,
@@ -139,7 +128,6 @@ codec_train = dict(
         },
         alpha=2.0,
         beta=4.0,
-        full_positive_loss=True,
     ),
 )
 
@@ -149,11 +137,13 @@ codec_eval = _deepcopy(codec_train)
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
 codec_infer['decode_cfg'] = dict(
+    valid_thresh=0.1,
     iou_gamma=2.0,
     pre_num=2048,
     post_num=256,
     overlap_thresh=0.1,
 )
+
 
 # data config
 db_sampler = dict(
@@ -188,9 +178,9 @@ dataloader_train = dict(
             dict(type='PcdGlobalTransform',
                  rot_range=[-0.78539816, 0.78539816],
                  scale_range=[0.95, 1.05],
-                 translation_std=[0.5, 0.5, 0.2]),
+                 translation_std=[0.5, 0.5, 0]),
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-            dict(type='PcdIntensityNormlizer', scale=2.0),
+            dict(type='PcdIntensityNormlizer'),
             dict(type='PcdShuffler'),
         ],
         #  filter=dict(type='IntervalDownsampler', interval=5),
@@ -202,7 +192,7 @@ dataloader_eval['shuffle'] = False
 dataloader_eval['dataset']['info_path'] = f'{dataset_root}/validation_info.pkl'
 dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-    dict(type='PcdIntensityNormlizer', scale=2.0),
+    dict(type='PcdIntensityNormlizer'),
     dict(type='PcdShuffler'),
 ]
 dataloader_eval['dataset']['filter'] = None
@@ -249,8 +239,8 @@ fit = dict(
 runtime = dict(
     train=dict(
         logger=[
-            dict(type='TensorBoardLogger', flush_secs=30),
-            dict(type='CSVLogger', flush_logs_every_n_steps=50),
+            dict(type='TensorBoardLogger',),
+            dict(type='CSVLogger',),
         ],
     ),
     eval=dict(evaluate_min_epoch=max_epochs-1),

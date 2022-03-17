@@ -136,12 +136,11 @@ codec_eval = _deepcopy(codec_train)
 codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
 codec_infer['decode_cfg'] = dict(
-    nms_cfg=dict(
-        pre_num=1024,
-        post_num=128,
-        overlap_thresh=0.1,
-    ),
     valid_thresh=0.1,
+    iou_gamma=2.0,
+    pre_num=2048,
+    post_num=256,
+    overlap_thresh=0.1,
 )
 
 

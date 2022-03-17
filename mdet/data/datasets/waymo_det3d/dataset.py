@@ -4,8 +4,6 @@ import os
 
 import numpy as np
 from tqdm import tqdm
-from waymo_open_dataset import label_pb2
-from waymo_open_dataset.protos import metrics_pb2
 
 from mdet.core.annotation import Annotation3d
 from mdet.core.pointcloud import Pointcloud
@@ -168,6 +166,9 @@ class WaymoDet3dDataset(MDet3dDataset):
         Return:
             pb object
         '''
+        from waymo_open_dataset import label_pb2
+        from waymo_open_dataset.protos import metrics_pb2
+
         objects = metrics_pb2.Objects()
         for anno, meta in tqdm(zip(anno_list, meta_list)):
             det_boxes = anno.boxes

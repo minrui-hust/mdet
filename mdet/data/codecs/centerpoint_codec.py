@@ -230,6 +230,10 @@ class CenterPointCodec(BaseCodec):
         r'''
         output --> pred
         '''
+        pre_num = self.decode_cfg['pre_num']
+        post_num = self.decode_cfg['post_num']
+        overlap_thresh = self.decode_cfg['overlap_thresh']
+        iou_gamma = self.decode_cfg.get('iou_gamma', None)
 
         heatmap = torch.sigmoid(output['heatmap'])
         B, C, H, W = heatmap.shape
@@ -248,57 +252,44 @@ class CenterPointCodec(BaseCodec):
         boxes = boxes.permute(0, 2, 3, 1).view(B, H*W, 8)
 
         # topk_socre: [B, K], topk_indices: [B, K], K = pre_nms_num
-        topk_score, topk_indices = score.topk(
-            self.decode_cfg['nms_cfg']['pre_num'], sorted=not self.iou_rectification)
-
+        topk_score, topk_indices = score.topk(pre_num, sorted=not iou_gamma)
         topk_boxes = boxes.gather(
             1, topk_indices.unsqueeze(-1).expand(-1, -1, boxes.shape[2]))  # [B, K, 8]
+        topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 8]
         topk_label = label.gather(1, topk_indices)  # [B, K]
 
-        if self.iou_rectification:
+        if iou_gamma is not None:
             # get predicted iou
-            iou = output['iou'].permute(0, 2, 3, 1).view(B, H*W, -1)
-            topk_iou = iou.gather(
-                1, topk_indices.unsqueeze(-1).expand(-1, -1, iou.shape[2]))
-            topk_iou = topk_iou.gather(1, topk_label)
+            iou = output['iou'].view(B, H*W)
+            topk_iou = iou.gather(1, topk_indices)
+            topk_iou = (topk_iou + 1) * 0.5  # range [-1,1] to [0,1]
 
             # rectify score
-            topk_score *= torch.pow(topk_iou, self.iou_rectification_gamma)
+            topk_score = topk_score * torch.pow(topk_iou, iou_gamma)
 
-            # sort by rectified score
-            topk_score, rectify_indices = torch.sort(
-                topk_score, dim=-1, descending=True)
+            # reorder
+            topk_score, rectify_indices = topk_score.topk(pre_num, sorted=True)
 
             # re-index
             topk_boxes = topk_boxes.gather(
                 1, rectify_indices.unsqueeze(-1).expand_as(topk_boxes))
             topk_label = topk_label.gather(1, rectify_indices)
-            topk_indices = topk_indices.gather(1, rectify_indices)
 
-        # decode boxes into standard format
-        topk_boxes = self.decode_box(topk_boxes, topk_indices)  # [B, K, 8]
-
-        # box for nms (bird eye view)
+        # do nms
         nms_boxes = topk_boxes[..., [0, 1, 3, 4, 6, 7]]
+        keep_indices, valid_num = nms_bev(
+            nms_boxes[0],
+            topk_score[0],
+            overlap_thresh,
+            post_num,
+        )
+        keep_indices = keep_indices.long()
+        det_box = topk_boxes[0][keep_indices]
+        det_label = topk_label[0][keep_indices]
+        det_score = topk_score[0][keep_indices]
+        pred = (det_box, det_score, det_label, valid_num)
 
-        # do nms for each sample
-        pred_list = []
-        batch_size = 1 if batch is None else batch['_info_']['size']
-        for i in range(batch_size):
-            keep_indices, valid_num = nms_bev(
-                nms_boxes[i],
-                topk_score[i],
-                self.decode_cfg['nms_cfg']['overlap_thresh'],
-                self.decode_cfg['nms_cfg']['post_num'],
-            )
-            keep_indices = keep_indices.long()
-            det_box = topk_boxes[i][keep_indices]
-            det_label = topk_label[i][keep_indices]
-            det_score = topk_score[i][keep_indices]
-            pred = (det_box, det_score, det_label, valid_num)
-            pred_list.append(pred)
-
-        return pred_list[0]
+        return pred
 
     def decode_trt(self, output, batch=None):
         pred_list = []

@@ -80,6 +80,7 @@ class PillarVoxelization(BaseModule):
             point_nums=point_num,
             voxel_nums = voxel_num,
             shape=list(reversed(self.voxel_reso)),
+            batch_size=1,
         )
 
 
