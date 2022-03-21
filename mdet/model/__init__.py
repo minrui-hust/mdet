@@ -1,6 +1,3 @@
-from .base_module import BaseModule
-
-import mdet.model.bricks
 import mdet.model.voxelization
 import mdet.model.backbone2d
 import mdet.model.backbone3d

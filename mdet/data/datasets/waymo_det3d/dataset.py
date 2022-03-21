@@ -2,14 +2,14 @@ import math
 import math
 import os
 
+from mai.utils import FI
+from mai.utils import io
 import numpy as np
 from tqdm import tqdm
 
-from mdet.core.annotation import Annotation3d
+from mdet.core.annotation3d import Annotation3d
 from mdet.core.pointcloud import Pointcloud
-from mdet.data.datasets.base_dataset import MDet3dDataset
-from mdet.utils.factory import FI
-import mdet.utils.io as io
+from mdet.data.datasets.mdet3d_dataset import MDet3dDataset
 import mdet.utils.rigid as rigid
 
 

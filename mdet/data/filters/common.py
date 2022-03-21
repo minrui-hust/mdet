@@ -1,4 +1,5 @@
-from mdet.utils.factory import FI
+from mai.utils import FI
+
 
 @FI.register
 class IntervalDownsampler(object):
@@ -7,6 +8,4 @@ class IntervalDownsampler(object):
         self.interval = interval
 
     def __call__(self, info, i):
-        return i%self.interval == 0
-
-
+        return i % self.interval == 0

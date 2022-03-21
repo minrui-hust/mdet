@@ -2,12 +2,12 @@ from functools import partial
 import multiprocessing as mp
 import os
 
+from mai.utils import FI
+from mai.utils import io
 import numpy as np
 from tqdm import tqdm
 
 from mdet.core.box_np_ops import points_in_boxes
-from mdet.utils.factory import FI
-import mdet.utils.io as io
 import mdet.utils.rigid as rigid
 
 

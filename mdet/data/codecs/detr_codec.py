@@ -2,20 +2,18 @@ from functools import partial
 import math
 import os
 
+from mai.data.codecs import BaseCodec
+from mai.utils import FI
 import numba as nb
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from scipy.optimize import linear_sum_assignment
 
-from mdet.core.annotation import Annotation3d
+from mdet.core.annotation3d import Annotation3d
 import mdet.model.loss.loss as loss
-from mdet.ops.iou3d import nms_bev, iou_bev
-from mdet.utils.factory import FI
-
-
-from .base_codec import BaseCodec
+from mdet.ops.iou3d import iou_bev, nms_bev
 
 
 @FI.register

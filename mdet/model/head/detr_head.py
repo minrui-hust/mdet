@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
-from mdet.model import BaseModule
-from mdet.utils.factory import FI
+from mai.model import BaseModule
+from mai.utils import FI
 
 
 @FI.register

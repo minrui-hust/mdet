@@ -1,15 +1,14 @@
 import math
 
+from mai.model import BaseModule
+from mai.model.uitls.construct_mask import construct_mask
+from mai.utils import FI
 import torch
 from torch.autograd.profiler import record_function
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mdet.model import BaseModule
-from mdet.model.utils import construct_mask
 from mdet.ops.dense import dense
-from mdet.utils.factory import FI
-from mdet.utils.misc import is_nan_or_inf
 
 
 @FI.register
@@ -63,7 +62,6 @@ class PillarFeatureNet(BaseModule):
         # construct pillar feature from raw points
         with record_function("construct_pillar"):
             pillar_feature = self.construct_pillar(voxels, coords, point_nums)
-        is_nan_or_inf(pillar_feature, 'pillar_feature.pre')
 
         # pass through pfn layers
         with record_function("pillar_pfn"):

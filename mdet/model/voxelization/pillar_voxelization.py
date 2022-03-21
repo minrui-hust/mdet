@@ -1,10 +1,10 @@
+from mai.model import BaseModule
+from mai.utils import FI
 import torch
-import torch.nn.functional as F
 from torch.autograd.profiler import record_function
+import torch.nn.functional as F
 
-from mdet.model import BaseModule
 from mdet.ops.voxelization import Voxelize
-from mdet.utils.factory import FI
 
 
 @FI.register

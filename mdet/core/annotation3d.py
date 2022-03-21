@@ -1,7 +1,8 @@
+from mai.data.datasets import Annotation
 import numpy as np
 
 
-class Annotation3d(object):
+class Annotation3d(Annotation):
     def __init__(self, boxes=np.empty((0, 8), dtype=np.float32), types=None, scores=None, num_points=None):
         super().__init__()
 

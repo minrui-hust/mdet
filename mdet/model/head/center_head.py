@@ -1,8 +1,9 @@
+from mai.model import BaseModule
+import mai.model.uitls.init as init
+from mai.utils import FI
 import torch
 import torch.nn as nn
-from mdet.utils.factory import FI
-from mdet.model import BaseModule
-from mdet.torchie.weight_init import kaiming_init
+from torch.nn import init
 
 
 @FI.register
@@ -67,7 +68,7 @@ class SepHead(BaseModule):
             else:  # special init for conv2d of non heatmap heads
                 for m in fc.modules():
                     if isinstance(m, nn.Conv2d):
-                        kaiming_init(m)
+                        init.kaiming_init(m)
 
             self.heads[head_name] = fc
 

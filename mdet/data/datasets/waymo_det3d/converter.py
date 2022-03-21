@@ -7,6 +7,8 @@ import os
 import os.path as osp
 import zlib
 
+from mai.utils import FI
+from mai.utils import io
 import numpy as np
 from tqdm import tqdm
 from waymo_open_dataset import dataset_pb2
@@ -14,8 +16,6 @@ from waymo_open_dataset import label_pb2
 from waymo_open_dataset.utils import range_image_utils
 from waymo_open_dataset.utils import transform_utils
 
-from mdet.utils.factory import FI
-import mdet.utils.io as io
 import tensorflow.compat.v2 as tf
 
 
@@ -129,7 +129,8 @@ def extract_points_from_range_image(laser, calibration, frame_pose, return1_only
         frame_pose = None
     returns = [zlib.decompress(laser.ri_return1.range_image_compressed)]
     if not return1_only:
-        returns.append(zlib.decompress(laser.ri_return2.range_image_compressed))
+        returns.append(zlib.decompress(
+            laser.ri_return2.range_image_compressed))
     points_list = []
     for range_image_str in returns:
         range_image = dataset_pb2.MatrixFloat.FromString(range_image_str)
@@ -195,7 +196,7 @@ def extract_objects(laser_labels):
                 box.center_x, box.center_y, box.center_z, box.length,
                 box.width, box.height, box.heading
             ],
-                     dtype=np.float32),
+                dtype=np.float32),
             'num_points':
             num_points,
             'level':

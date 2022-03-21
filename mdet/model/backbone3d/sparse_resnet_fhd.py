@@ -1,10 +1,9 @@
+from mai.utils import FI
+import spconv.pytorch as spconv
+from spconv.pytorch import SparseConv3d, SubMConv3d
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from mdet.utils.factory import FI
-import spconv.pytorch as spconv
-from spconv.pytorch import SparseConv3d, SubMConv3d
 
 
 class SparseBasicBlock(spconv.SparseModule):

@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mdet.model import BaseModule
-from mdet.utils.factory import FI
+from mai.model import BaseModule
+from mai.utils import FI
 
 
 @FI.register

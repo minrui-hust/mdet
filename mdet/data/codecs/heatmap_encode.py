@@ -1,9 +1,9 @@
 import math
 
+from mai.utils import FI
 import numpy as np
 
 from mdet.core.box_np_ops import corners_nd, rotate2d
-from mdet.utils.factory import FI
 from mdet.utils.gaussian import (
     draw_gaussian,
     draw_gaussian_kernel_2D,

@@ -4,9 +4,9 @@ import torch.nn.functional as F
 
 import math
 
-from mdet.utils.factory import FI
-from mdet.model.base_module import BaseModule
-from mdet.model.utils import construct_mask
+from mai.utils import FI
+from mai.model import BaseModule
+from mai.model.utils.construct_mask import construct_mask
 
 
 @FI.register
