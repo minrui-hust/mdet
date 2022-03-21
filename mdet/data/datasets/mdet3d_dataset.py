@@ -19,8 +19,8 @@ class MDet3dDataset(BaseDataset):
     '''
     TypePalette = np.array([[0.9, 0, 0], [0, 0.9, 0], [0, 0, 0.9]])
 
-    def __init__(self, info_path, transforms=None, codec=None, filter=None):
-        super().__init__(info_path, transforms, codec, filter)
+    def __init__(self, info_path, filters=None, transforms=None, codec=None):
+        super().__init__(info_path, filters, transforms, codec)
 
     def load(self, sample, info):
         self.load_meta(sample, info)

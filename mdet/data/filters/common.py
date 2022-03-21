@@ -7,5 +7,6 @@ class IntervalDownsampler(object):
         super().__init__()
         self.interval = interval
 
-    def __call__(self, info, i):
-        return i % self.interval == 0
+    def __call__(self, info_list):
+        return info_list[::self.interval]
+

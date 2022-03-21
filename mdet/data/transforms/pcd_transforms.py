@@ -14,7 +14,7 @@ from mdet.data.transforms.transform_utils import (
     transform_boxes,
     transform_points,
 )
-from mdet.utils.factory import FI
+from mai.utils import FI
 
 
 @FI.register

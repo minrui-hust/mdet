@@ -1,5 +1,5 @@
 from copy import deepcopy as _deepcopy
-from mdet.utils.global_config import GCFG
+from mai.utils import GCFG
 
 # global config maybe override by command line
 batch_size = GCFG['batch_size'] or 2  # different from original, which is 4
@@ -92,8 +92,8 @@ model_train = dict(
 model_eval = _deepcopy(model_train)
 model_eval['voxelization']['max_voxels'] = 300000
 
-# model for inference(export)
-model_infer = _deepcopy(model_eval)
+# model for export
+model_export = _deepcopy(model_eval)
 
 
 # codecs config
@@ -144,9 +144,9 @@ codec_train = dict(
 codec_eval = _deepcopy(codec_train)
 #  codec_eval['encode_cfg']['encode_anno'] = False
 
-codec_infer = _deepcopy(codec_eval)
-codec_infer['encode_cfg']['encode_anno'] = False
-codec_infer['decode_cfg'] = dict(
+codec_export = _deepcopy(codec_eval)
+codec_export['encode_cfg']['encode_anno'] = False
+codec_export['decode_cfg'] = dict(
     nms_cfg=dict(
         pre_num=2048,
         post_num=256,
@@ -176,6 +176,7 @@ dataloader_train = dict(
     dataset=dict(
         type='WaymoDet3dDataset',
         info_path=f'{dataset_root}/training_info.pkl',
+        #  filters=dict(type='IntervalDownsampler', interval=5),
         load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
                       RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],),
         transforms=[
@@ -194,7 +195,6 @@ dataloader_train = dict(
             dict(type='PcdIntensityNormlizer', scale=2.0),
             dict(type='PcdShuffler'),
         ],
-        #  filter=dict(type='IntervalDownsampler', interval=5),
     ),
 )
 
@@ -206,27 +206,27 @@ dataloader_eval['dataset']['transforms'] = [
     dict(type='PcdIntensityNormlizer', scale=2.0),
     dict(type='PcdShuffler'),
 ]
-dataloader_eval['dataset']['filter'] = None
+dataloader_eval['dataset']['filters'] = []
 
-dataloader_infer = _deepcopy(dataloader_eval)
+dataloader_export = _deepcopy(dataloader_eval)
 
 # collect config
 model = dict(
     train=model_train,
     eval=model_eval,
-    infer=model_infer,
+    export=model_export,
 )
 
 codec = dict(
     train=codec_train,
     eval=codec_eval,
-    infer=codec_infer,
+    export=codec_export,
 )
 
 data = dict(
     train=dataloader_train,
     eval=dataloader_eval,
-    infer=dataloader_infer,
+    export=dataloader_export,
 )
 
 fit = dict(

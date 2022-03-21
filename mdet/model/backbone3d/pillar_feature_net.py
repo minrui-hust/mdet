@@ -1,7 +1,5 @@
-import math
-
 from mai.model import BaseModule
-from mai.model.uitls.construct_mask import construct_mask
+from mai.model.utils.construct_mask import construct_mask
 from mai.utils import FI
 import torch
 from torch.autograd.profiler import record_function

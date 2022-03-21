@@ -18,10 +18,11 @@ class WaymoDet3dDataset(MDet3dDataset):
     def __init__(self,
                  info_path,
                  load_opt={},
+                 filters=[],
                  transforms=[],
                  codec=None,
-                 filter=None):
-        super().__init__(info_path, transforms, codec, filter)
+                 ):
+        super().__init__(info_path, filters, transforms, codec)
         self.load_opt = load_opt
 
         self.pcd_loader = WaymoNSweepLoader(

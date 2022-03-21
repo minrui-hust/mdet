@@ -3,6 +3,7 @@ import math
 import os
 
 from mai.data.codecs import BaseCodec
+from mai.data.collators import Collator
 from mai.utils import FI
 import numpy as np
 import torch
@@ -396,7 +397,6 @@ class CenterPointCodec(BaseCodec):
 
     def get_collater(self):
         collator_cfg = dict(
-            type='SimpleCollator',
             rules={
                 # rules for data
                 '.data': dict(type='append'),
@@ -451,7 +451,7 @@ class CenterPointCodec(BaseCodec):
             },
         )
 
-        return FI.create(collator_cfg)
+        return Collator(**collator_cfg)
 
     def plot(self, sample,
              show_pcd=True,

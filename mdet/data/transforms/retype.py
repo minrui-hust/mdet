@@ -1,6 +1,7 @@
-from mdet.utils.factory import FI
+from mai.utils.factory import FI
 import numpy as np
-from mdet.core.annotation import Annotation3d
+
+from mdet.core.annotation3d import Annotation3d
 
 
 @FI.register

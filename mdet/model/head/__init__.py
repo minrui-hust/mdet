@@ -1,3 +1,3 @@
-import center_head
-import detr_head
-import mlp_head
+from . import center_head
+from . import detr_head
+from . import mlp_head

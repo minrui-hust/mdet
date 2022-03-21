@@ -1,9 +1,8 @@
 from mai.model import BaseModule
-import mai.model.uitls.init as init
+import mai.model.utils.init as init
 from mai.utils import FI
 import torch
 import torch.nn as nn
-from torch.nn import init
 
 
 @FI.register
