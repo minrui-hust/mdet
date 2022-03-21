@@ -39,7 +39,8 @@ class CenterPointCodec(BaseCodec):
         self.heatmap_encoder = FI.create(self.encode_cfg['heatmap_encoder'])
 
         self.keypoint_labels = self.encode_cfg.get('keypoint_labels', [])
-        self.keypoint_encoder = FI.create(self.encode_cfg.get('keypoint_encoder', None))
+        self.keypoint_encoder = FI.create(
+            self.encode_cfg.get('keypoint_encoder', None))
 
         # many type may map to same label
         self.type_to_label = {}
@@ -125,7 +126,7 @@ class CenterPointCodec(BaseCodec):
         positive_keypoint_indices = None
         if self.keypoint_encoder is not None:
             keypoint_map = np.zeros(
-                (self.grid_reso[1], self.grid_reso[0]), dtype=np.float32)
+                (1, self.grid_reso[1], self.grid_reso[0]), dtype=np.float32)
             for i in range(len(boxes)):
                 if labels[i] in self.keypoint_labels:
                     corners = rotate2d(corners_nd(boxes[[i], 3:5]), boxes[[
@@ -133,7 +134,7 @@ class CenterPointCodec(BaseCodec):
 
                     corners = (corners-self.point_range[:2])/self.grid_size[:2]
 
-                    self.keypoint_encoder(keypoint_map, boxes[i], corners)
+                    self.keypoint_encoder(keypoint_map[0], boxes[i], corners)
 
             mask = [i for i, label in enumerate(
                 labels) if label in self.keypoint_labels]
@@ -317,7 +318,8 @@ class CenterPointCodec(BaseCodec):
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_heatmap_index)
             elif head_name == 'keypoint_map':
-                positive_keypoint_index = batch['gt']['positive_keypoint_indices'].long()
+                positive_keypoint_index = batch['gt']['positive_keypoint_indices'].long(
+                )
                 heatmap_prediction = self.safe_sigmoid(head_prediction)
                 loss = self.criteria_heatmap(
                     heatmap_prediction, batch['gt'][head_name], positive_keypoint_index)
@@ -478,7 +480,7 @@ class CenterPointCodec(BaseCodec):
 
             if show_heatmap_gt:
                 heatmap = sample['gt']['heatmap'][label]
-                heatmap = torch.sigmoid(heatmap)
+                #  heatmap = torch.sigmoid(heatmap)
                 x = self.point_range[0] + self.grid_size[0] * \
                     np.arange(self.grid_reso[0]+1)
                 y = self.point_range[1] + self.grid_size[1] * \
@@ -495,8 +497,8 @@ class CenterPointCodec(BaseCodec):
                 ax.pcolormesh(x, y, heatmap, cmap='hot', alpha=0.6)
 
             if show_keypoint_gt:
-                heatmap = sample['gt']['keypoint_map']
-                heatmap = torch.sigmoid(heatmap)
+                heatmap = sample['gt']['keypoint_map'].squeeze(0)
+                #  heatmap = torch.sigmoid(heatmap)
                 x = self.point_range[0] + self.grid_size[0] * \
                     np.arange(self.grid_reso[0]+1)
                 y = self.point_range[1] + self.grid_size[1] * \
@@ -504,7 +506,7 @@ class CenterPointCodec(BaseCodec):
                 ax.pcolormesh(x, y, heatmap, cmap='hot', alpha=0.6)
 
             if show_keypoint_pred:
-                heatmap = sample['output']['keypoint_map']
+                heatmap = sample['output']['keypoint_map'].squeeze(0)
                 heatmap = torch.sigmoid(heatmap)
                 x = self.point_range[0] + self.grid_size[0] * \
                     np.arange(self.grid_reso[0]+1)

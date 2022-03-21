@@ -128,6 +128,7 @@ codec_train = dict(
         },
         alpha=2.0,
         beta=4.0,
+        full_positive_loss=True,
     ),
 )
 

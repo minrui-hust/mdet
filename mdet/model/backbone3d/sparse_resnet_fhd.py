@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mdet.model.utils import build_norm
 from mdet.utils.factory import FI
 import spconv.pytorch as spconv
 from spconv.pytorch import SparseConv3d, SubMConv3d
@@ -30,7 +29,7 @@ class SparseBasicBlock(spconv.SparseModule):
             padding=1,
             indice_key=indice_key,
         )
-        self.bn1 = build_norm(norm_cfg, planes)
+        self.bn1 = FI.create(norm_cfg, planes)
 
         self.conv2 = spconv.SubMConv3d(
             planes,
@@ -40,7 +39,7 @@ class SparseBasicBlock(spconv.SparseModule):
             padding=1,
             indice_key=indice_key,
         )
-        self.bn2 = build_norm(norm_cfg, planes)
+        self.bn2 = FI.create(norm_cfg, planes)
 
         self.downsample = downsample
 
@@ -72,7 +71,7 @@ class SparseResNetFHD(nn.Module):
 
         self.conv_input = spconv.SparseSequential(
             SubMConv3d(in_channels, 16, 3, bias=False, indice_key="res0"),
-            build_norm(norm_cfg, 16),
+            FI.create(norm_cfg, 16),
             nn.ReLU(inplace=True),
         )
 
@@ -83,7 +82,7 @@ class SparseResNetFHD(nn.Module):
 
         self.conv2 = spconv.SparseSequential(
             SparseConv3d(16, 32, 3, stride=2, padding=1, bias=False),
-            build_norm(norm_cfg, 32),
+            FI.create(norm_cfg, 32),
             nn.ReLU(inplace=True),
             SparseBasicBlock(32, 32, norm_cfg=norm_cfg, indice_key="res1"),
             SparseBasicBlock(32, 32, norm_cfg=norm_cfg, indice_key="res1"),
@@ -91,7 +90,7 @@ class SparseResNetFHD(nn.Module):
 
         self.conv3 = spconv.SparseSequential(
             SparseConv3d(32, 64, 3, stride=2, padding=1, bias=False),
-            build_norm(norm_cfg, 64),
+            FI.create(norm_cfg, 64),
             nn.ReLU(inplace=True),
             SparseBasicBlock(64, 64, norm_cfg=norm_cfg, indice_key="res2"),
             SparseBasicBlock(64, 64, norm_cfg=norm_cfg, indice_key="res2"),
@@ -99,7 +98,7 @@ class SparseResNetFHD(nn.Module):
 
         self.conv4 = spconv.SparseSequential(
             SparseConv3d(64, 128, 3, stride=2, padding=[0, 1, 1], bias=False),
-            build_norm(norm_cfg, 128),
+            FI.create(norm_cfg, 128),
             nn.ReLU(inplace=True),
             SparseBasicBlock(128, 128, norm_cfg=norm_cfg, indice_key="res3"),
             SparseBasicBlock(128, 128, norm_cfg=norm_cfg, indice_key="res3"),
@@ -108,7 +107,7 @@ class SparseResNetFHD(nn.Module):
         self.extra_conv = spconv.SparseSequential(
             SparseConv3d(128, 128, (3, 1, 1), stride=(2, 1, 1),
                          bias=False),
-            build_norm(norm_cfg, 128),
+            FI.create(norm_cfg, 128),
             nn.ReLU(inplace=True),
         )
 
@@ -161,13 +160,13 @@ class SparseResNetUHD(nn.Module):
 
         self.conv_input = spconv.SparseSequential(
             SubMConv3d(in_channels, 16, 3, bias=False, indice_key="res0"),
-            build_norm(norm_cfg, 16),
+            FI.create(norm_cfg, 16),
             nn.ReLU(inplace=True),
         )
 
         self.conv1 = spconv.SparseSequential(
             SparseConv3d(16, 32, 3, stride=2, padding=1, bias=False),
-            build_norm(norm_cfg, 32),
+            FI.create(norm_cfg, 32),
             nn.ReLU(inplace=True),
             SparseBasicBlock(32, 32, norm_cfg=norm_cfg, indice_key="res1"),
             SparseBasicBlock(32, 32, norm_cfg=norm_cfg, indice_key="res1"),
@@ -175,7 +174,7 @@ class SparseResNetUHD(nn.Module):
 
         self.conv2 = spconv.SparseSequential(
             SparseConv3d(32, 32, 3, stride=1, padding=1, bias=False),
-            build_norm(norm_cfg, 32),
+            FI.create(norm_cfg, 32),
             nn.ReLU(inplace=True),
             SparseBasicBlock(32, 32, norm_cfg=norm_cfg, indice_key="res2"),
             SparseBasicBlock(32, 32, norm_cfg=norm_cfg, indice_key="res2"),
@@ -183,7 +182,7 @@ class SparseResNetUHD(nn.Module):
 
         self.conv3 = spconv.SparseSequential(
             SparseConv3d(32, 64, 3, stride=2, padding=1, bias=False),
-            build_norm(norm_cfg, 64),
+            FI.create(norm_cfg, 64),
             nn.ReLU(inplace=True),
             SparseBasicBlock(64, 64, norm_cfg=norm_cfg, indice_key="res3"),
             SparseBasicBlock(64, 64, norm_cfg=norm_cfg, indice_key="res3"),
@@ -191,7 +190,7 @@ class SparseResNetUHD(nn.Module):
 
         self.conv4 = spconv.SparseSequential(
             SparseConv3d(64, 64, 3, stride=1, padding=[0, 1, 1], bias=False),
-            build_norm(norm_cfg, 64),
+            FI.create(norm_cfg, 64),
             nn.ReLU(inplace=True),
             SparseBasicBlock(64, 64, norm_cfg=norm_cfg, indice_key="res4"),
             SparseBasicBlock(64, 64, norm_cfg=norm_cfg, indice_key="res4"),
@@ -199,7 +198,7 @@ class SparseResNetUHD(nn.Module):
 
         self.extra_conv = spconv.SparseSequential(
             SparseConv3d(64, 64, (3, 1, 1), stride=(2, 1, 1), bias=False),
-            build_norm(norm_cfg, 64),
+            FI.create(norm_cfg, 64),
             nn.ReLU(inplace=True),
         )
 

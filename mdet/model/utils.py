@@ -28,8 +28,3 @@ def construct_mask(actual_num, max_num, inverse=False):
     else:
         return actual_num > step_num
 
-
-def build_norm(norm_cfg, shape):
-    cfg = norm_cfg.copy()
-    type_str = cfg.pop('type')
-    return nn.__dict__[type_str](shape, **cfg)

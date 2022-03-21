@@ -109,15 +109,16 @@ codec_train = dict(
         heatmap_encoder=dict(
             type='GaussianBoxHeatmapEncoder',
             grid=out_grid_size[0],
-            min_radius=1.5,
+            min_radius=2.0,
             offset_enable=True,
         ),
         keypoint_encoder=dict(
             type='GaussianBoxKeypointEncoder',
             grid=out_grid_size[0],
-            min_radius=0,
-            #  offset_enable=True,
+            min_radius=1.0,
+            offset_enable=True,
         ),
+        keypoint_labels=[Label.Vehicle],
     ),
     decode_cfg={
         Label.Vehicle:    dict(pre_num=4096, post_num=512, overlap_thresh=0.8,  iou_gamma=2.0, valid_thresh=0.05),
@@ -147,8 +148,8 @@ codec_infer = _deepcopy(codec_eval)
 codec_infer['encode_cfg']['encode_anno'] = False
 codec_infer['decode_cfg'] = dict(
     nms_cfg=dict(
-        pre_num=1024,
-        post_num=128,
+        pre_num=2048,
+        post_num=256,
         overlap_thresh=0.1,
     ),
     valid_thresh=0.1,

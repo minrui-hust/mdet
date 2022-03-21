@@ -1,5 +1,7 @@
 import inspect
 
+import torch.nn as nn
+
 from mdet.utils.singleton import Singleton
 
 
@@ -13,7 +15,7 @@ class Factory(object):
         self._register(cls)
         return cls
 
-    def create(self, cfg):
+    def create(self, cfg, *args):
         if cfg is None:
             return None
         if not isinstance(cfg, dict):
@@ -21,12 +23,15 @@ class Factory(object):
         if 'type' not in cfg:
             raise KeyError(f'`cfg` must contain the key "type", but got {cfg}')
 
-        args = cfg.copy()
-        component_name = args.pop('type')
-        if component_name not in self._component_dict:
-            raise KeyError(f'{component_name} is not registered')
-
-        return self._component_dict[component_name](**args)
+        cfg = cfg.copy()
+        module_name = cfg.pop('type')
+        if module_name in self._component_dict:
+            return self._component_dict[module_name](*args, **cfg)
+        elif module_name in nn.__dict__:
+            return nn.__dict__[module_name](*args, **cfg)
+        else:
+            raise KeyError(
+                f'{module_name} is not registered nor it is a torch module')
 
     def _register(self, component_cls):
         if not inspect.isclass(component_cls):
