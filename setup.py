@@ -104,6 +104,7 @@ def parse_requirements(fname='requirements.txt', with_version=True):
     packages = list(gen_packages_items())
     return packages
 
+install_requires = parse_requirements()
 
 if __name__ == '__main__':
     setup(
@@ -121,7 +122,7 @@ if __name__ == '__main__':
         package_data={'mdet.ops': ['*/*.so']},
         classifiers=[],
         license='',
-        requires=[],
+        install_requires=install_requires,
         ext_modules=[
             make_cuda_ext(
                 name='voxelization',

@@ -1,5 +1,5 @@
 import torch
-from mdet.utils.factory import FI
+from mai.utils import FI
 import mdet.model
 
 # global config

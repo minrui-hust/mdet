@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from mdet.core.annotation3d import Annotation3d
-import mdet.model.loss.loss as loss
+from mai.model.loss import loss
 from mdet.ops.iou3d import iou_bev, nms_bev
 
 

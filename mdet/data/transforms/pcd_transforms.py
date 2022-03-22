@@ -1,5 +1,6 @@
 import time
 
+from mai.utils import FI
 import numpy as np
 
 from mdet.core.geometry2d import box_collision_test
@@ -14,7 +15,6 @@ from mdet.data.transforms.transform_utils import (
     transform_boxes,
     transform_points,
 )
-from mai.utils import FI
 
 
 @FI.register

@@ -4,6 +4,7 @@ import os
 
 from mai.data.codecs import BaseCodec
 from mai.data.collators import Collator
+from mai.model.loss import loss
 from mai.utils import FI
 import numpy as np
 import torch
@@ -11,7 +12,6 @@ import torch.nn.functional as F
 
 from mdet.core.annotation3d import Annotation3d
 from mdet.core.box_np_ops import corners_nd, rotate2d
-import mdet.model.loss.loss as loss
 from mdet.ops.iou3d import iou_bev, nms_bev
 
 
