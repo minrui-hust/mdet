@@ -227,7 +227,7 @@ class CenterPointCodec(BaseCodec):
 
         return pred_list
 
-    def decode_infer(self, output, batch=None):
+    def decode_export(self, output, batch=None):
         r'''
         output --> pred
         '''
