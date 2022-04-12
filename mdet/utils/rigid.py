@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 def transform(tf, points):
@@ -28,3 +29,25 @@ def inverse(tf):
     inversed[:3, :3] = inversed[:3, :3].transpose()
     inversed[:3, 3] = -np.matmul(inversed[:3, :3], inversed[:3, 3])
     return inversed
+
+
+def from_coeffs(coeffs):
+    r'''
+    transform matrix from coeffs [x,y,z, w,x,y,z]
+    '''
+    px = coeffs[0]
+    py = coeffs[1]
+    pz = coeffs[2]
+    qw = coeffs[3]
+    qx = coeffs[4]
+    qy = coeffs[5]
+    qz = coeffs[6]
+
+    rotation = Rotation.from_quat(np.array([qx, qy, qz, qw], dtype=np.float32))
+    translation = np.array([px, py, pz], dtype=np.float32)
+
+    transform = np.identity(4, dtype=np.float32)
+    transform[:3, :3] = rotation.as_matrix()
+    transform[:3, 3] = translation
+
+    return transform
