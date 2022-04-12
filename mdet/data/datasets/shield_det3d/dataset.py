@@ -154,30 +154,11 @@ class ShieldObjectNSweepLoader(object):
         '''
         assert(self.nsweep > 0)
 
-        prefix, seq_id, frame_id, object_id = sweeps['prefix'], sweeps[
-            'seq_id'], sweeps['frame_id'], sweeps['object_id']
+        prefix, seq_name, frame_name, object_id = sweeps['prefix'], sweeps[
+            'seq_name'], sweeps['frame_name'], sweeps['object_id']
 
-        pcd_list = []
-        tf_map_vehicle0 = None
-        for sweep_id in range(self.nsweep):
-            sweep_frame_id = max(0, frame_id-sweep_id)
-            sweep_data_path = os.path.join(
-                prefix, seq_id, f'{sweep_frame_id}-{object_id}.pkl')
-
-            if not os.path.exists(f'{sweep_data_path}.gz'):
-                assert(sweep_id > 0)
-                continue
-
-            pcd, tf_map_vehicle = io.load(sweep_data_path, compress=True)
-
-            if sweep_id == 0:
-                tf_map_vehicle0 = tf_map_vehicle
-
-            if sweep_id > 0:
-                tf_cur_past = rigid.between(tf_map_vehicle0, tf_map_vehicle)
-                pcd = rigid.transform(tf_cur_past, pcd)
-            pcd_list.append(pcd)
-
-        points = np.concatenate(pcd_list, axis=0)
+        sweep_data_path = os.path.join(
+            prefix, seq_name, f'{frame_name}-{object_id}.pkl')
+        points = io.load(sweep_data_path, compress=True)
 
         return Pointcloud(points=points[:, :self.load_dim])

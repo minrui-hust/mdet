@@ -38,17 +38,34 @@ out_grid_reso = [200, 200]
 
 margin = 2.0
 
+db_sampler = dict(
+    type='GroundTruthSamplerV2',
+    info_path='/data/dataset/avengers/det3d/testdatav6/train_info_gt.pkl',
+    pcd_loader=dict(type='ShieldObjectNSweepLoader', load_dim=4, nsweep=1),
+    interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
+    retype=None,
+    filters=[],
+)
+
+
 dataset = dict(
     type='ShieldDet3dDataset',
-    info_path='/data/dataset/avengers/det3d/testdatav5/train_info.pkl',
+    info_path='/data/dataset/avengers/det3d/testdatav6/train_info.pkl',
     load_opt=dict(load_dim=4, nsweep=1, interest_types=[
                   RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian]),
     transforms=[
+        dict(type='PcdObjectSamplerV2',
+             db_sampler=db_sampler, sample_groups={
+                 RawType.Vehicle: 3,
+                 RawType.Cyclist: 0,
+                 RawType.Pedestrian: 5,
+             }),
         #  dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
         #  dict(type='PcdGlobalTransform',
         #       rot_range=[-0.78539816, 0.78539816],
         #       scale_range=[0.95, 1.05],
         #       translation_std=[0.5, 0.5, 0]),
+
         dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
         #  dict(type='PcdIntensityNormlizer'),
         #  dict(type='PcdShuffler'),
