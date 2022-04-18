@@ -61,7 +61,7 @@ class MDet3dDataset(BaseDataset):
                         box_color=box_color, box_label=None, prefix='anno')
 
         if show_pred and 'pred' in sample:
-            mask = sample['pred'].scores > 0.5
+            mask = sample['pred'].scores > 0.3
             box_color = np.array([self.TypePalette[(
                 type+1) % self.TypePalette.shape[0]] for type in sample['pred'].types])
             vis.add_box(sample['pred'].boxes[mask],

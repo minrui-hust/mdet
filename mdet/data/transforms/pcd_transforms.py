@@ -138,13 +138,18 @@ class PcdIntensityNormlizer(object):
     Normalize the pcd intensity field to a valid range
     '''
 
-    def __init__(self, scale=1.0):
+    def __init__(self, scale=1.0, method='tanh'):
         super().__init__()
         self.scale = scale
+        self.method = method
+        assert(method in ['tanh', 'linear'])
 
     def __call__(self, sample, info):
         points = sample['data']['pcd'].points
-        points[:, 3] = np.tanh(points[:, 3]*self.scale)
+        if self.method == 'tanh':
+            points[:, 3] = np.tanh(points[:, 3]*self.scale)
+        elif self.method == 'linear':
+            points[:, 3] = points[:, 3]/self.scale
 
 
 @FI.register
@@ -159,6 +164,44 @@ class PcdShuffler(object):
     def __call__(self, sample, info):
         sample['data']['pcd'].points = np.random.permutation(
             sample['data']['pcd'].points)
+
+
+@FI.register
+class PcdStaticTransform(object):
+    r'''
+    Apply static global translation, rotation
+    '''
+
+    def __init__(self, translation=[0, 0, 0], rot=None):
+        super().__init__()
+
+        self.translation = np.array(translation, dtype=np.float32)
+        self.rot = rot
+
+    def __call__(self, sample, info):
+        # translate points
+        sample['data']['pcd'].points[:, :3] -= self.translation
+
+        # translate gt boxes
+        sample['anno'].boxes[:, :3] -= self.translation
+
+        # rotation
+        if self.rot is not None:
+            cos_alpha = np.cos(self.rot)
+            sin_alpha = np.sin(self.rot)
+            rotm = np.array(
+                [[cos_alpha, -sin_alpha], [sin_alpha, cos_alpha]], dtype=np.float32).T
+
+            # rotate points
+            sample['data']['pcd'].points[:,
+                                         :2] = sample['data']['pcd'].points[:, :2] @ rotm
+
+            #  rotate boxes center
+            sample['anno'].boxes[:, :2] = sample['anno'].boxes[:,
+                                                               :2] @ rotm
+
+            # rotate boxes rotation
+            sample['anno'].boxes[:, 6:] = sample['anno'].boxes[:, 6:] @ rotm
 
 
 @FI.register

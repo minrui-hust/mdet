@@ -395,7 +395,7 @@ class CenterPointCodec(BaseCodec):
 
         return loss_dict
 
-    def get_collater(self):
+    def collater(self):
         collator_cfg = dict(
             rules={
                 # rules for data

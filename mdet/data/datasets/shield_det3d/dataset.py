@@ -137,7 +137,9 @@ class ShieldNSweepLoader(object):
                 pcd = rigid.transform(tf_cur_past, pcd)
             pcd_list.append(pcd)
 
-        return Pointcloud(points=np.concatenate(pcd_list, axis=0).astype(np.float32))
+        points = np.concatenate(pcd_list, axis=0)
+
+        return Pointcloud(points=points.astype(np.float32))
 
 
 @FI.register
