@@ -7,11 +7,11 @@ def transform(tf, points):
     tf: transform matrix in 4x4
     points: in shape NxD, D>=3
     '''
-    assert len(points.shape) == 2 and points.shape[1] >= 3
+    assert len(points.shape) >= 2 and points.shape[1] >= 3
 
-    cord = points[:, :3]
-    feat = points[:, 3:]
-    cord = np.matmul(tf[:3, :3], cord.transpose()).transpose() + tf[:3, 3]
+    cord = points[..., :3]
+    feat = points[..., 3:]
+    cord = cord @ tf[:3, :3].T + tf[:3, 3]
 
     return np.concatenate([cord, feat], axis=-1)
 
