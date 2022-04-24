@@ -25,9 +25,12 @@ class SECONDFPN(BaseModule):
     def __init__(self,
                  in_channels=[128, 128, 256],
                  out_channels=[256, 256, 256],
-                 upsample_strides=[1, 2, 4]):
+                 upsample_strides=[1, 2, 4],
+                 cat_output_list=True,
+                 ):
         super().__init__()
         assert len(out_channels) == len(upsample_strides) == len(in_channels)
+        self.cat_output_list = cat_output_list
 
         deblocks = []
         for in_channel, out_channel, stride in zip(in_channels, out_channels, upsample_strides):
@@ -57,7 +60,8 @@ class SECONDFPN(BaseModule):
     def forward_train(self, x):
         assert len(x) == len(self.deblocks)
 
-        ups = [deblock(d) for d, deblock in zip(x, self.deblocks)]
-        out = torch.cat(ups, dim=1)
+        out = [deblock(d) for d, deblock in zip(x, self.deblocks)]
+        if self.cat_output_list:
+            out = torch.cat(out, dim=1)
 
         return out

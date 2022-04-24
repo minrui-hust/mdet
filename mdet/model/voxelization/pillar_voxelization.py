@@ -21,7 +21,7 @@ class PillarVoxelization(BaseModule):
         self.keep_dim = keep_dim
 
     @torch.no_grad()
-    def forward_train(self, batch):
+    def forward_train(self, points_list):
         # iterate on pcds
         voxel_out_list = [
             Voxelize(points,
@@ -32,7 +32,7 @@ class PillarVoxelization(BaseModule):
                      self.max_voxels,
                      self.reduce_type,
                      self.keep_dim)
-            for points in batch['input']['points']
+            for points in points_list
         ]
 
         # collate voxelization output list
@@ -44,7 +44,7 @@ class PillarVoxelization(BaseModule):
             coords=coords,
             point_nums=point_nums,
             shape=list(reversed(self.voxel_reso)),
-            batch_size=batch['_info_']['size'],
+            batch_size=len(points_list),
         )
 
     def colloate(self, voxel_out_list):
