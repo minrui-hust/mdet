@@ -1,7 +1,8 @@
 from mai.data.datasets import BaseDataset
 import numpy as np
+from mai.utils import FI
 
-
+@FI.register
 class MDet3dDataset(BaseDataset):
     r'''
     Base class of all 3d detection dataset
@@ -45,7 +46,8 @@ class MDet3dDataset(BaseDataset):
         '''
         raise NotImplementedError
 
-    def plot(self, sample, show_data=True, show_anno=True, show_pred=True):
+    @classmethod
+    def plot(cls, sample, show_data=True, show_anno=True, show_pred=True):
         r'''
         plot standard 3d detection sample using open3d
         '''

@@ -93,11 +93,9 @@ class BevTransformerFusion(BaseModule):
         Args:
             query: input query, shape (B, F, H, W)
             key_list: input keys of multi level, each level is in shape (B*C, F, H, W), C is camera number
-            cam_calibs: camera calibrations, tuple of (extrinsics, intrinsics), extrinsics in shape (B, C, 4, 4)
-                intrinsics in shape (B, C, 3, 3)
+            cam_calibs: camera calibrations, in shape (B, C, 3, 4), [KR|Kt]
         '''
-        B, H, W, C, L, Z = query.shape[0], query.shape[2], query.shape[
-            3], cam_calibs[0].shape[1], self.key_level, self.query_Z
+        B, H, W, C, L, Z = query.shape[0], query.shape[2], query.shape[3], cam_calibs.shape[1], self.key_level, self.query_Z
 
         # add positional_encoding and reshape
         query = (query + self.query_pe).permute(0, 2, 3, 1).reshape(B, H*W, -1)
@@ -111,8 +109,7 @@ class BevTransformerFusion(BaseModule):
         key = torch.concat(key_list_reshaped, dim=1)
 
         # calc ref point and mask based on cam_calibs
-        ref_point, ref_mask, ref_scale = self.ref_3d_to_2d(
-            self.query_ref_point3d, cam_calibs[0], cam_calibs[1])
+        ref_point, ref_mask, ref_scale = self.ref_3d_to_2d(self.query_ref_point3d, cam_calibs)
         ref_point = ref_point.view(B*C, Z*H*W, 1, 2).expand(-1, -1, L, -1)
         ref_mask = ref_mask.view(B*C, Z*H*W)
         ref_scale = ref_scale.view(B, H*W)
@@ -149,30 +146,25 @@ class BevTransformerFusion(BaseModule):
 
         return torch.from_numpy(point3d)
 
-    def ref_3d_to_2d(self, point3d, extrinsics, intrinsics, eps=1e-6):
+    def ref_3d_to_2d(self, point3d, calibs, eps=1e-6):
         r'''
         Args:
             point3d: in shape (Z, H, W, 3)
-            extrinsics: in shape (B, C, 4, 4)
-            intrinsics: inshape (B, C, 3, 3)
+            calibs: in shape (B, C, 3, 4), [KR | Kt]
         Return:
             ref_point: in shape (B, C, Z, H, W, 2)
             ref_mask: in shape (B, C, Z, H, W)
             ref_scale: in shape (B, H, W)
         '''
-        B, C, Z, H, W = *extrinsics.shape[:2], *point3d.shape[:3]
+        B, C, Z, H, W = *calibs.shape[:2], *point3d.shape[:3]
 
-        I = intrinsics.view(B, C, 1, 1, 3, 3)
-        R = extrinsics[..., :3, :3].view(B, C, 1, 1, 3, 3)
-        t = extrinsics[..., :3, 3].view(B, C, 1, 1, 1, 3)
+        KR = calibs[...,:3,:3].view(B, C, 1, 1, 3, 3)
+        Kt = calibs[...,:3, 3].view(B, C, 1, 1, 1, 3)
 
         point3d = point3d.view(1, 1, Z, H, W, 3)
 
         # (B, C, Z, H, W, 3)
-        cam_point = torch.matmul(point3d, R.transpose(4, 5)) + t
-
-        # (B, C, Z, H, W, 3)
-        img_point = torch.matmul(cam_point, I.transpose(4, 5))
+        img_point = torch.matmul(point3d, KR.transpose(4,5)) + Kt
 
         # (B, C, Z, H, W, 2)
         ref_point = img_point[..., :2]/(img_point[..., [2]] + eps)

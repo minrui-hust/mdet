@@ -72,7 +72,8 @@ class WaymoDet3dDataset(MDet3dDataset):
                                       types=types,
                                       num_points=num_points)
 
-    def format(self, sample_list, pred_path=None, gt_path=None):
+    @classmethod
+    def format(cls, sample_list, pred_path=None, gt_path=None):
         r'''
         format output to dataset specific format for submission and evaluation.
         if output_path is None, a tmp file will be used
@@ -86,7 +87,7 @@ class WaymoDet3dDataset(MDet3dDataset):
         if pred_path is not None:
             print('Formatting predictions...')
             pred_list = [sample['pred'] for sample in sample_list]
-            pred_pb = self._format_anno_list(pred_list, meta_list)
+            pred_pb = cls._format_anno_list(pred_list, meta_list)
             io.dump(pred_pb, pred_path)
             print(f'Save formatted predictions into {pred_path}')
 
@@ -94,13 +95,14 @@ class WaymoDet3dDataset(MDet3dDataset):
         if gt_path is not None:
             print('Formatting groundtruth...')
             gt_list = [sample['anno'] for sample in sample_list]
-            gt_pb = self._format_anno_list(gt_list, meta_list)
+            gt_pb = cls._format_anno_list(gt_list, meta_list)
             io.dump(gt_pb, gt_path)
             print(f'Save formatted groundtruth into {gt_path}')
 
         return pred_path, gt_path
 
-    def evaluate(self, pred_path, gt_path):
+    @classmethod
+    def evaluate(cls, pred_path, gt_path):
         r'''
         evaluate metrics
         '''
@@ -158,7 +160,8 @@ class WaymoDet3dDataset(MDet3dDataset):
 
         return ap_dict
 
-    def _format_anno_list(self, anno_list, meta_list):
+    @classmethod
+    def _format_anno_list(cls, anno_list, meta_list):
         r'''
         format Annotation3d into dataset specific format for evaluation and submission
         Args:

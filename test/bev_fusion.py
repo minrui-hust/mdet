@@ -169,8 +169,7 @@ model = FI.create(model_config).half().cuda()
 points = [torch.rand(1000, point_dim, dtype=torch.float32).cuda(),
           torch.rand(1200, point_dim, dtype=torch.float32).cuda()]
 images = torch.rand(2, n_cams, 3, in_h, in_w, dtype=torch.float32).cuda()
-calibs = (torch.rand(2, n_cams, 4, 4, dtype=torch.float32).cuda(),
-          torch.rand(2, n_cams, 3, 3, dtype=torch.float32).cuda())
+calibs = torch.rand(2, n_cams, 3, 4, dtype=torch.float32).cuda()
 
 batch = dict(input=dict(points=points, images=images, calibs=calibs))
 

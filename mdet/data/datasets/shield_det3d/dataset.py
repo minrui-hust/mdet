@@ -88,10 +88,12 @@ class ShieldDet3dDataset(MDet3dDataset):
 
         return dict(boxes=boxes.astype(np.float32), types=types.astype(np.int32))
 
-    def format(self, sample_list, pred_path=None, gt_path=None):
+    @classmethod
+    def format(cls, sample_list, pred_path=None, gt_path=None):
         return pred_path, gt_path
 
-    def evaluate(self, pred_path, gt_path):
+    @classmethod
+    def evaluate(cls, pred_path, gt_path):
         return None
 
 

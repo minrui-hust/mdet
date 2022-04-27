@@ -1,5 +1,5 @@
 import mdet.data
-from mai.tools.view import main, parse_args
+from mai.tools.view_dataset import main, parse_args
 
 r'''
 View model predictions

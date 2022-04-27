@@ -453,7 +453,8 @@ class CenterPointCodec(BaseCodec):
 
         return Collator(**collator_cfg)
 
-    def plot(self, sample,
+    @classmethod
+    def plot(cls, sample,
              show_pcd=True,
              show_box=True,
              show_heatmap_gt=False,
