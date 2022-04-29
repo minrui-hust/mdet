@@ -2,6 +2,7 @@ from mai.data.datasets import BaseDataset
 import numpy as np
 from mai.utils import FI
 
+
 @FI.register
 class MDet3dDataset(BaseDataset):
     r'''
@@ -58,14 +59,14 @@ class MDet3dDataset(BaseDataset):
 
         if show_anno and 'anno' in sample:
             box_color = np.array(
-                [self.TypePalette[type % self.TypePalette.shape[0]] for type in sample['anno'].types])
+                [cls.TypePalette[type % cls.TypePalette.shape[0]] for type in sample['anno'].types])
             vis.add_box(sample['anno'].boxes,
                         box_color=box_color, box_label=None, prefix='anno')
 
         if show_pred and 'pred' in sample:
             mask = sample['pred'].scores > 0.3
-            box_color = np.array([self.TypePalette[(
-                type+1) % self.TypePalette.shape[0]] for type in sample['pred'].types])
+            box_color = np.array([cls.TypePalette[(
+                type+1) % cls.TypePalette.shape[0]] for type in sample['pred'].types])
             vis.add_box(sample['pred'].boxes[mask],
                         box_color=box_color[mask], box_label=None, prefix='pred')
 

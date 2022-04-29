@@ -18,7 +18,7 @@ class Det3dOneStage(BaseModule):
         self.head = FI.create(head)
 
     def forward_train(self, batch):
-        voxel_out = self.voxelization(batch)
+        voxel_out = self.voxelization(batch['input']['points'])
         bb3d_out = self.backbone3d(voxel_out)
         bb2d_out = self.backbone2d(bb3d_out)
         neck_out = self.neck(bb2d_out)

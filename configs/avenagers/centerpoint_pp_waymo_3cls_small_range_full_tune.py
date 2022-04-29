@@ -16,6 +16,12 @@ class RawType:
     Pedestrian = 2
 
 
+class WaymoRawType:
+    Vehicle = 1
+    Cyclist = 4
+    Pedestrian = 2
+
+
 class Label:
     Vehicle = 0
     Cyclist = 1
@@ -149,9 +155,15 @@ codec_export['decode_cfg'] = dict(
 
 
 # data config
-db_sampler = dict(
+waymo_type_remap = {
+    WaymoRawType.Pedestrian: RawType.Pedestrian,
+    WaymoRawType.Cyclist: RawType.Cyclist,
+    WaymoRawType.Vehicle: RawType.Vehicle,
+}
+
+shield_db_sampler = dict(
     type='GroundTruthSamplerV2',
-    info_path=f'{dataset_root}/train_info_gt.pkl',
+    info_path=f'{dataset_root[0]}/train_info_gt.pkl',
     pcd_loader=dict(type='ShieldObjectNSweepLoader',
                     load_dim=point_dim, nsweep=1),
     interest_types=[RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian],
@@ -161,67 +173,114 @@ db_sampler = dict(
     ],
 )
 
-dataloader_train = dict(
-    batch_size=batch_size,
-    num_workers=num_workers,
-    shuffle=True,
-    pin_memory=False,
-    dataset=dict(
+waymo_db_sampler = dict(
+    type='GroundTruthSamplerV2',
+    info_path=f'{dataset_root[1]}/training_info_gt.pkl',
+    pcd_loader=dict(type='WaymoObjectNSweepLoader',
+                    load_dim=point_dim, nsweep=1),
+    interest_types=[WaymoRawType.Vehicle,
+                    WaymoRawType.Cyclist,
+                    WaymoRawType.Pedestrian],
+    filters=[
+        dict(type='FilterByNumpoints', min_points_groups=5),
+        dict(type='FilterByRange', range=point_range),
+    ],
+)
+
+
+data_train = dict(
+    dataloader=dict(
+        batch_size=batch_size,
+        num_workers=num_workers,
+        shuffle=True,
+        pin_memory=False,
+    ),
+    dataset=[
+        dict(
+            type='ShieldDet3dDataset',
+            info_path=f'{dataset_root[0]}/train_info.pkl',
+            load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
+                RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian]),
+            filters=[],
+            transforms=[
+                dict(type='PcdObjectSamplerV2', db_sampler=shield_db_sampler, sample_groups={
+                    RawType.Vehicle: 5,
+                    RawType.Cyclist: 0,
+                    RawType.Pedestrian: 5,
+                }),
+                dict(type='PcdStaticTransform', translation=[4.0, 0, 0.3]),
+                dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
+                dict(type='PcdGlobalTransform',
+                     rot_range=[-0.78539816, 0.78539816],
+                     scale_range=[0.95, 1.05],
+                     translation_std=[0.5, 0.5, 0.2]),
+                dict(type='PcdRangeFilter',
+                     point_range=point_range, margin=margin),
+                dict(type='PcdIntensityNormlizer',
+                     scale=255.0, method='linear'),
+                dict(type='PcdShuffler'),
+            ],
+        ),
+        dict(
+            type='RandomDownsampleDataset',
+            size=1000,
+            dataset=dict(
+                type='WaymoDet3dDataset',
+                info_path=f'{dataset_root[1]}/training_info.pkl',
+                load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
+                    WaymoRawType.Vehicle, WaymoRawType.Cyclist, WaymoRawType.Pedestrian]),
+                transforms=[
+                    dict(type='PcdObjectSamplerV2', db_sampler=waymo_db_sampler, sample_groups={
+                        WaymoRawType.Vehicle: 15,
+                        WaymoRawType.Cyclist: 10,
+                        WaymoRawType.Pedestrian: 10,
+                    }),
+                    dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
+                    dict(type='PcdGlobalTransform', rot_range=[-0.78539816, 0.78539816], scale_range=[
+                        0.95, 1.05], translation_std=[0.5, 0.5, 0.2]),
+                    dict(type='PcdRangeFilter',
+                         point_range=point_range, margin=margin),
+                    dict(type='PcdIntensityNormlizer', scale=2.0),
+                    dict(type='PcdShuffler'),
+                    dict(type='SimpleAnnoRetyper',
+                         type_raw_to_new=waymo_type_remap),
+                ],
+            ),
+        ),
+    ],
+)
+
+data_eval = _deepcopy(data_train)
+data_eval['dataloader']['shuffle'] = False
+data_eval['dataset'] = [
+    dict(
         type='ShieldDet3dDataset',
-        info_path=f'{dataset_root}/train_info.pkl',
+        info_path=f'{dataset_root[0]}/val_info.pkl',
         load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
-                      RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian]),
-        filters=[],
+            RawType.Vehicle, RawType.Cyclist, RawType.Pedestrian]),
         transforms=[
-            dict(type='PcdObjectSamplerV2', db_sampler=db_sampler, sample_groups={
-                RawType.Vehicle: 5,
-                RawType.Cyclist: 0,
-                RawType.Pedestrian: 5,
-            }),
             dict(type='PcdStaticTransform', translation=[4.0, 0, 0.3]),
-            dict(type='PcdMirrorFlip', mirror_prob=0.5, flip_prob=0.5),
-            dict(type='PcdGlobalTransform',
-                 rot_range=[-0.78539816, 0.78539816],
-                 scale_range=[0.95, 1.05],
-                 translation_std=[0.5, 0.5, 0.2]),
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
             dict(type='PcdIntensityNormlizer', scale=255.0, method='linear'),
             dict(type='PcdShuffler'),
         ],
     ),
-)
-
-dataloader_eval = _deepcopy(dataloader_train)
-dataloader_eval['shuffle'] = False
-dataloader_eval['dataset']['info_path'] = f'{dataset_root}/val_info.pkl'
-dataloader_eval['dataset']['transforms'] = [
-    dict(type='PcdStaticTransform', translation=[4.0, 0, 0.3]),
-    dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
-    dict(type='PcdIntensityNormlizer', scale=255.0, method='linear'),
-    dict(type='PcdShuffler'),
+    dict(
+        type='WaymoDet3dDataset',
+        info_path=f'{dataset_root[1]}/validation_info.pkl',
+        load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
+            WaymoRawType.Vehicle, WaymoRawType.Cyclist, WaymoRawType.Pedestrian]),
+        transforms=[
+            dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
+            dict(type='PcdIntensityNormlizer', scale=2.0),
+            dict(type='PcdShuffler'),
+            dict(type='SimpleAnnoRetyper', type_raw_to_new=waymo_type_remap),
+        ],
+    ),
 ]
-dataloader_eval['dataset']['filters'] = []
 
-dataloader_export = _deepcopy(dataloader_eval)
+data_export = _deepcopy(data_eval)
 
-# collect config
-model = dict(
-    train=model_train,
-    eval=model_eval,
-    export=model_export,
-)
-
-codec = dict(
-    train=codec_train,
-    eval=codec_eval,
-    export=codec_export,
-)
-
-data = dict(
-    train=dataloader_train,
-    eval=dataloader_eval,
-    export=dataloader_export,
-)
 
 fit = dict(
     max_epochs=max_epochs,
@@ -251,4 +310,24 @@ runtime = dict(
     ),
     eval=dict(evaluate_min_epoch=max_epochs-1),
     test=dict(),
+)
+
+
+# collect config
+model = dict(
+    train=model_train,
+    eval=model_eval,
+    export=model_export,
+)
+
+codec = dict(
+    train=codec_train,
+    eval=codec_eval,
+    export=codec_export,
+)
+
+data = dict(
+    train=data_train,
+    eval=data_eval,
+    export=data_export,
 )

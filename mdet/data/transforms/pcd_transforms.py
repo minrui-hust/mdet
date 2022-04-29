@@ -28,7 +28,7 @@ class PcdRangeFilter(object):
         self.point_range = point_range
         self.margin = margin
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         x_min = self.point_range[0]
         y_min = self.point_range[1]
         x_max = self.point_range[3]
@@ -61,7 +61,7 @@ class PointNumFilter(object):
         super().__init__()
         self.groups = groups
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         labels_name = sample['meta']['labels_name']
         type2label = sample['meta']['type2label']
 
@@ -98,7 +98,7 @@ class PointNumFilterV2(object):
         super().__init__()
         self.groups = groups
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         num_points = sample['anno'].num_points
         types = sample['anno'].types
 
@@ -126,10 +126,38 @@ class AnnoRetyper(object):
         super().__init__()
         self.retype = FI.create(retype)
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         if self.retype:
             sample['anno'] = self.retype.retype_anno(sample['anno'])
             sample['meta']['type_new_to_raw'] = self.retype.get_type_map()
+
+
+@FI.register
+class SimpleAnnoRetyper(object):
+    r'''
+    assign new type id
+    '''
+
+    def __init__(self, type_raw_to_new=dict()):
+        super().__init__()
+        self.type_raw_to_new = type_raw_to_new
+
+        # this may lost information, when mapping is not one to one
+        self.type_new_to_raw = {}
+        for raw, new in type_raw_to_new.items():
+            self.type_new_to_raw[new] = raw
+
+    def __call__(self, sample, info, ds):
+        types = sample['anno'].types
+        for i in range(len(types)):
+            types[i] = self._retype(types[i])
+        sample['meta']['type_new_to_raw'] = self.type_new_to_raw
+
+    def _retype(self, raw_type):
+        if raw_type in self.type_raw_to_new:
+            return self.type_raw_to_new[raw_type]
+        else:
+            return raw_type
 
 
 @FI.register
@@ -144,7 +172,7 @@ class PcdIntensityNormlizer(object):
         self.method = method
         assert(method in ['tanh', 'linear'])
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         points = sample['data']['pcd'].points
         if self.method == 'tanh':
             points[:, 3] = np.tanh(points[:, 3]*self.scale)
@@ -161,7 +189,7 @@ class PcdShuffler(object):
     def __init__(self):
         super().__init__()
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         sample['data']['pcd'].points = np.random.permutation(
             sample['data']['pcd'].points)
 
@@ -178,7 +206,7 @@ class PcdStaticTransform(object):
         self.translation = np.array(translation, dtype=np.float32)
         self.rot = rot
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         # translate points
         sample['data']['pcd'].points[:, :3] -= self.translation
 
@@ -227,7 +255,7 @@ class PcdGlobalTransform(object):
         self.rot_range = rot_range
         self.scale_range = scale_range
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         self._scale(sample)
         self._rotate(sample)
         self._translate(sample)
@@ -281,7 +309,7 @@ class PcdMirrorFlip(object):
         self.mirror_prob = mirror_prob
         self.flip_prob = flip_prob
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         self._mirror(sample)
         self._flip(sample)
 
@@ -320,7 +348,7 @@ class PcdObjectSampler(object):
         super().__init__()
         self.db_sampler = FI.create(db_sampler)
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         sampled = self.db_sampler.sample_all(sample['anno'])
 
         # merge sampled and original
@@ -340,7 +368,7 @@ class PcdObjectSamplerV2(object):
         self.sampler = FI.create(db_sampler)
         self.sample_groups = sample_groups
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         anno = sample['anno']
 
         gt_boxes = anno.boxes
@@ -397,7 +425,7 @@ class PcdLocalTransform(object):
         self.rot_range = rot_range
         self.num_try = num_try
 
-    def __call__(self, sample, info):
+    def __call__(self, sample, info, ds):
         boxes = sample['anno'].boxes
         points = sample['data']['pcd'].points
 
