@@ -88,16 +88,16 @@ class WaymoDet3dDataset(MDet3dDataset):
             print('Formatting predictions...')
             pred_list = [sample['pred'] for sample in sample_list]
             pred_pb = cls._format_anno_list(pred_list, meta_list)
-            io.dump(pred_pb, pred_path)
-            print(f'Save formatted predictions into {pred_path}')
+            print(f'Saving formatted predictions into {pred_path}')
+            io.dump(pred_pb, pred_path, format='pb3')
 
         # process anno
         if gt_path is not None:
             print('Formatting groundtruth...')
             gt_list = [sample['anno'] for sample in sample_list]
             gt_pb = cls._format_anno_list(gt_list, meta_list)
-            io.dump(gt_pb, gt_path)
-            print(f'Save formatted groundtruth into {gt_path}')
+            print(f'Saving formatted groundtruth into {gt_path}')
+            io.dump(gt_pb, gt_path, format='pb3')
 
         return pred_path, gt_path
 
@@ -110,7 +110,7 @@ class WaymoDet3dDataset(MDet3dDataset):
         ret_bytes = subprocess.check_output(
             f'mdet/data/datasets/waymo_det3d/compute_detection_metrics_main {pred_path} {gt_path}', shell=True)
         ret_texts = ret_bytes.decode('utf-8')
-        print(ret_texts)
+        #  print(ret_texts)
 
         # parse the text to get ap_dict
         ap_dict = {
@@ -157,6 +157,8 @@ class WaymoDet3dDataset(MDet3dDataset):
         ap_dict.pop('Sign/L1 mAPH')
         ap_dict.pop('Sign/L2 mAP')
         ap_dict.pop('Sign/L2 mAPH')
+
+        print(ap_dict)
 
         return ap_dict
 

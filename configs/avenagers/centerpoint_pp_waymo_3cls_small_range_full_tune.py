@@ -270,6 +270,7 @@ data_eval['dataset'] = [
         info_path=f'{dataset_root[1]}/validation_info.pkl',
         load_opt=dict(load_dim=point_dim, nsweep=1, interest_types=[
             WaymoRawType.Vehicle, WaymoRawType.Cyclist, WaymoRawType.Pedestrian]),
+        filters=[dict(type='IntervalDownsampler', interval=100)],
         transforms=[
             dict(type='PcdRangeFilter', point_range=point_range, margin=margin),
             dict(type='PcdIntensityNormlizer', scale=2.0),
